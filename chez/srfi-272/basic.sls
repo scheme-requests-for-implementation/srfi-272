@@ -7,7 +7,7 @@
 (library (srfi-272 basic)
 
   (export
-    ; procedures 
+    ; procedures
     pp pprint pprint-shared pprint-simple
     ; parameters
     pp-width pp-circle pp-graph)

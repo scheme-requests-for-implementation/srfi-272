@@ -76,7 +76,7 @@ SPDX-License-Identifier: MIT
 
 <h2 id="issues">Issues</h2>
 
-<p>The name <code>pp</code> conflicts with existing pretty-printing procedures in Gambit, 
+<p>The name <code>pp</code> conflicts with existing pretty-printing procedures in Gambit,
 Bigloo, and some other implementations.</p>
 
 <h2 id="rationale">Rationale</h2>
@@ -109,9 +109,9 @@ Bigloo, and some other implementations.</p>
   this integrated approach offered pretty printer dispatch tables, logical blocks for grouping
   and conditional line breaks, format directives such as <code>~&lt;</code>..<code>~&gt;</code>,
   and XP-style constraint-satisfaction formatting that optimized aesthetic criteria when choosing
-  line breaks [<a href="#ref2">2</a>]. The motivation was a single powerful framework capable of 
-  handling everything from debug output to complex document generation, allowing users to employ 
-  one system regardless of whether they were printing data, generating source code, or producing 
+  line breaks [<a href="#ref2">2</a>]. The motivation was a single powerful framework capable of
+  handling everything from debug output to complex document generation, allowing users to employ
+  one system regardless of whether they were printing data, generating source code, or producing
   formatted reports.
 </p>
 
@@ -243,7 +243,7 @@ Bigloo, and some other implementations.</p>
 Libraries described below have overlapping functionality and export identically-named identifiers.
 Unless explicitly specified in the description of a particular library, there is no guarantee
 that an identically-named identifier exported from two different libraries refers to the same binding.
-This means that importing two or more pretty-printing libraries into the same code may require 
+This means that importing two or more pretty-printing libraries into the same code may require
 explicit renaming of imported identifiers. In practice, as a rule, only one
 of the <code>(srfi 272)</code>, <code>(srfi 272 basic)</code>, <code>(srfi 272 intermediate)</code>,
 <code>(srfi 272 advanced)</code>, and <code>(srfi 272 fancy)</code> libraries should be
@@ -254,14 +254,14 @@ prefix or to rename manually on import.
 
 <p>
 While naming the libraries, we follow R7RS conventions; for R6RS systems, the numerical name segment should
-be prefixed with a colon, e.g. <code>(srfi :272 basic)</code>. 
+be prefixed with a colon, e.g. <code>(srfi :272 basic)</code>.
 </p>
 
 <p>
 Square brackets in procedure prototypes
-denote groups of optional arguments; if a group is followed by an ellipsis, the whole group may be repeated 
+denote groups of optional arguments; if a group is followed by an ellipsis, the whole group may be repeated
 zero or more times. This is a shortcut notation used wherever a more traditional multiple-prototype
-notation would be inconvenient. We still use multiple-prototype notation when a difference in arity is 
+notation would be inconvenient. We still use multiple-prototype notation when a difference in arity is
 semantically meaningful, e.g., when an extra argument changes the procedure from a getter to a setter.
 </p>
 
@@ -470,7 +470,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   explicitly listed, must be such that reading the printed number back in the same implementation produces
   an <code>eqv?</code> numerical value. (A relaxed rule applies to NaNs: if the number being printed is a NaN,
   it may be read back as a NaN with a different payload).<br/>
-  &nbsp;&nbsp;&nbsp;&nbsp;Systems supporting input and output of hexadecimal floats 
+  &nbsp;&nbsp;&nbsp;&nbsp;Systems supporting input and output of hexadecimal floats
   (see <a href="https://srfi.schemers.org/srfi-270/">SRFI 270</a>) are encouraged to use it when
   radix is set to 16.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;An implementation may support non-numerical values for <code>pp-radix</code>
@@ -483,8 +483,8 @@ changes in behavior depend only on the parameter values, not on the method by wh
 <p>
 <small>
   Note: Common Lisp has two separate control variables, <code>*print-base*</code> and <code>*print-radix*</code>,
-  allowing one to control the numerical base and the printing of the numerical prefix separately. This proposal 
-  combines them into a single parameter to ensure pretty-that pretty-printed numbers can always be read back 
+  allowing one to control the numerical base and the printing of the numerical prefix separately. This proposal
+  combines them into a single parameter to ensure pretty-that pretty-printed numbers can always be read back
   by <code>read</code>.
 </small>
 </p>
@@ -618,9 +618,9 @@ changes in behavior depend only on the parameter values, not on the method by wh
     by <code>read</code>.
     At the very least, the notations used should be unique enough to be recognized as stubs.
     Possible candidates are Unicode ellipsis, <code>"&hellip;"</code>, mid dots <code>"&middot;&middot;&middot;"</code>,
-    or spaced dots <code>". . ."</code>; multiple hashes <code>"###"</code> also work. 
+    or spaced dots <code>". . ."</code>; multiple hashes <code>"###"</code> also work.
     Using traditional ellipsis <code>"..."</code> as a length/level stub makes it almost impossible
-    to view abbreviated syntax definitions; this is a major nuisance. 
+    to view abbreviated syntax definitions; this is a major nuisance.
   </small>
 </p>
 
@@ -955,7 +955,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
 <p>
   <small>
   Note: the <code>make-pprint-generator</code> procedure serves as an integration point for plugging the proposed
-  pretty printer into the <a href="https://srfi.schemers.org/srfi-166/">SRFI 166</a> framework; 
+  pretty printer into the <a href="https://srfi.schemers.org/srfi-166/">SRFI 166</a> framework;
   see the <code>(srfi 272 show)</code> library below.
   </small>
 </p>
@@ -1029,22 +1029,22 @@ changes in behavior depend only on the parameter values, not on the method by wh
 
 <p>
   Also, while processing top-level line comments, <code>pprint-file</code>
-  in decoration mode must recognize special ‘style comments’, extracting custom formatting 
-  instructions embedded within them. This allows one to dynamically extend the pretty printer on a per-file 
-  basis by assigning specific formatting rules to new identifiers. To be processed, a style comment must 
+  in decoration mode must recognize special ‘style comments’, extracting custom formatting
+  instructions embedded within them. This allows one to dynamically extend the pretty printer on a per-file
+  basis by assigning specific formatting rules to new identifiers. To be processed, a style comment must
   have the following general structure:
 </p>
 <pre><code>;; * pp-styles:</code> <i>symbol</i> <code>:=</code> <i>style</i> [ <code>;</code> <i>symbol</i> <code>:=</code> <i>style</i> ... ]</pre>
 
 <p>
-    A style comment begins with one or more semicolons, followed by whitespace, followed by the 
-    literal prefix <code>* pp-styles:</code>. This is immediately followed 
-    by the target symbol&thinsp;—&thinsp;the Scheme identifier requiring custom layout 
-    rules&thinsp;—&thinsp;which is bound via the literal assignment operator <code>:=</code> to its style value. 
-    This value can be an inherited style, represented by a standalone symbol naming an already-styled 
-    identifier such as <code>let</code> or <code>define</code>, or an explicit style object representation&thinsp;—&thinsp; 
-    an S-expression starting with an underscore that conforms to the style object S-expression grammar 
-    described above. Multiple assignments can be chained sequentially within a single comment by separating 
+    A style comment begins with one or more semicolons, followed by whitespace, followed by the
+    literal prefix <code>* pp-styles:</code>. This is immediately followed
+    by the target symbol&thinsp;—&thinsp;the Scheme identifier requiring custom layout
+    rules&thinsp;—&thinsp;which is bound via the literal assignment operator <code>:=</code> to its style value.
+    This value can be an inherited style, represented by a standalone symbol naming an already-styled
+    identifier such as <code>let</code> or <code>define</code>, or an explicit style object representation&thinsp;—&thinsp;
+    an S-expression starting with an underscore that conforms to the style object S-expression grammar
+    described above. Multiple assignments can be chained sequentially within a single comment by separating
     them with a semicolon. Spaces and tabs are used as inter-token space in the usual way.
     Examples:
 </p>
@@ -1270,8 +1270,8 @@ changes in behavior depend only on the parameter values, not on the method by wh
     should take into consideration the character's Unicode General Category, check it against Combining Marks and
     Zero Width Joiners, and look up its Emoji_Presentation property if it is an emoji. It is notoriously hard
     to ensure that the return value is in sync with the behavior of the terminal, especially for characters
-    in the ‘Ambiguous’ category in <code>EastAsianWidth.txt</code> (in modern practice, these are traditionally 
-    rendered as width 1 on Western terminals and width 2 on CJK-configured terminals). For mission-critical 
+    in the ‘Ambiguous’ category in <code>EastAsianWidth.txt</code> (in modern practice, these are traditionally
+    rendered as width 1 on Western terminals and width 2 on CJK-configured terminals). For mission-critical
     applications, the only way to be 100% accurate is to install a specific version of the procedure after
     probing the terminal. Ensure that this procedure performs well; it lies on the critical path.
   </small>
@@ -1284,7 +1284,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   and <code>(srfi 272 advanced)</code> libraries are supported. It uses the advanced library's
   <code>make-pprint-generator</code> procedure to integrate advanced pretty printing with the
   Monadic Formatting framework. It re-exports all parameters with the <code>pp-</code> prefix
-  from the <code>(srfi 272 advanced)</code> library, as well as two procedures returning 
+  from the <code>(srfi 272 advanced)</code> library, as well as two procedures returning
   SRFI 166 formatters:
 </p>
 
@@ -1294,12 +1294,12 @@ changes in behavior depend only on the parameter values, not on the method by wh
 
   This procedure is similar to the SRFI 166 <code>pretty</code> formatter procedure, but uses the advanced
   printer internally. Like the <code>pp</code> procedure, it accepts additional keyword arguments in the
-  form of alternating key and value expressions. Each key expression must evaluate to a parameter object 
+  form of alternating key and value expressions. Each key expression must evaluate to a parameter object
   available through the advanced printing library. Each value expression must evaluate to an object
   acceptable as a value for the preceding parameter.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;The <code>pp-width</code> parameter is treated specially: for the internal
   printer call the value of the SRFI 166's <code>width</code> state variable overrides any explicitly
-  or implicitly specified value of <code>pp-width</code>. 
+  or implicitly specified value of <code>pp-width</code>.
 </p>
 
 <p>
@@ -1354,7 +1354,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
 </p>
 
 <p id="ref2">
-  [2] Waters, Richard. (2004). XP. A Common Lisp Pretty Printing System. 
+  [2] Waters, Richard. (2004). XP. A Common Lisp Pretty Printing System.
 </p>
 
 <p id="ref3">
@@ -1396,16 +1396,16 @@ This SRFI's repository contains two sample implementations.
 
 <p>
   The first one is a portable R7RS implementation;
-  its only external dependency is <code>(srfi 39)</code>, to ensure that parameters may be set globally 
+  its only external dependency is <code>(srfi 39)</code>, to ensure that parameters may be set globally
   (R7RS does not provide a method for doing so). It is tested on Chibi Scheme and Skint. As an illustration
   of the size-to-functionality approach, the first three libraries have separate implementations that are only
   as large as their functionality requires; the advanced and fancy libraries share printer code.
 </p>
 
 <p>
-  The second one is a sample implementation for Chez Scheme. It illustrates a different approach, 
+  The second one is a sample implementation for Chez Scheme. It illustrates a different approach,
   in which the first three libraries adapt the functionality provided by Chez Scheme's regular pretty-printer.
-  The advanced and fancy libraries use an independent printer implementation, but share the Chez Scheme 
+  The advanced and fancy libraries use an independent printer implementation, but share the Chez Scheme
   printer's parameters (e.g., <code>pp-width</code> refers to the same binding as <code>pretty-line-length</code>).
 </p>
 
@@ -1414,7 +1414,7 @@ This SRFI's repository contains two sample implementations.
 <p>
   This proposal builds upon and is inspired by the work of countless contributors spanning
   the early Lisp era to the present day. Acknowledging each individual by name would be
-  impossible without risk of omission. I am grateful to Andrew Pochinsky, John Cowan, 
+  impossible without risk of omission. I am grateful to Andrew Pochinsky, John Cowan,
   Jeronimo Pellegrini, Peter McGoron, Shiro Kawai, and Marc Feeley for their feedback.
 </p>
 

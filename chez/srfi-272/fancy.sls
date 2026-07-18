@@ -9,7 +9,7 @@
   (export read-decorated
     ; procedures
     pp pp* pprint pprint-shared pprint-simple pprint-file
-    pprint-file/html pretty-style pretty-hook  
+    pprint-file/html pretty-style pretty-hook
     ; parameters
     pp-width pp-circle pp-graph pp-radix pp-length
     pp-level pp-lines pp-indent pp-tab pp-max-tab pp-miser-width
@@ -22,7 +22,7 @@
     (rnrs mutable-pairs) (rnrs io simple) (rnrs io ports)
     (rnrs bytevectors) (rnrs exceptions)
     (only (chezscheme)
-      box? box unbox set-box! 
+      box? box unbox set-box!
       make-parameter open-output-string get-output-string
       open-input-string define-values)
     (rename (srfi-272 advanced) (pprint-file advanced-pprint-file))
@@ -35,34 +35,34 @@
   (define lbrk #\[)
   (define rpar #\))
   (define rbrk #\])
-  
+
   (define (list->bytevector l)
     (define bv (make-bytevector (length l)))
     (do ((l l (cdr l)) (i 0 (+ i 1))) ((null? l) bv)
       (bytevector-u8-set! bv i (car l))))
-  
+
   (define (read-decorated port)
 
     (define (r-error p msg . args)
       (apply error 'decorated-reader msg args))
-    
+
     (define (atomic? form)
       (not (or (pair? form) (and (vector? form) (> (vector-length form) 0))
                (and (string? form) (> (string-length form) 0)))))
-    
+
     (define decorations '())
     (define (decorate! form hc* tc)
       (unless (or (atomic? form) (and (not tc) (null? hc*)))
         (set! decorations
           (cons (cons form (cons tc hc*)) decorations))))
-    
+
     (define-values (reader-token? close-paren close-bracket dot)
       (let ((rtm (list 'reader-token)))
         (values
           (lambda (form) (and (pair? form) (eq? (car form) rtm)))
           (cons rtm "right parenthesis") (cons rtm "right bracket")
           (cons rtm "dot"))))
-    
+
     (define (ws-tail p)
       (let ((c (peek-char p)))
         (cond ((eqv? c #\newline) (read-char p) #f) ; end of tail
@@ -71,38 +71,38 @@
                (ws-tail p))
               ((eqv? c #\;) (get-line p)) ; Chez uses get-line
               (else #f))))
-    
+
     (define (sub-read-carefully p)
       (let ((form (sub-read p)))
         (cond ((eof-object? form) (r-error p "unexpected end of file"))
               ((reader-token? form)
                (r-error p "unexpected token" (cdr form)))
               (else form))))
-    
+
     (define (char-delimiter? c)
       (or (char-whitespace? c) (char=? c lpar) (char=? c rpar)
           (char=? c lbrk) (char=? c rbrk) (char=? c #\")
           (char=? c #\|) (char=? c #\;)))
-    
+
     (define (char-symbolic? c)
       (or (char-alphabetic? c) (char-numeric? c)
           (memv c
                 '(#\! #\$ #\% #\& #\* #\/ #\: #\< #\= #\> #\? #\^ #\_ #\~ #\+ #\- #\. #\@))))
-    
+
     (define (sub-scan-to-delimiter c p)
       (let loop ((l (list c)))
         (let ((c (peek-char p)))
           (cond ((or (eof-object? c) (char-delimiter? c))
                  (list->string (reverse l)))
                 (else (loop (cons (read-char p) l)))))))
-    
+
     (define (sub-read-to-delimiter c p)
       (let ((s (sub-scan-to-delimiter c p)))
         (if (string=? s ".")
             dot
             (read (open-input-string
                     (if *fold-case* (string-append "#!fold-case " s) s))))))
-    
+
     (define (sub-read-char p)
       (let ((c (read-char p)))
         (if (eof-object? c)
@@ -112,7 +112,7 @@
                   c
                   (let ((s (sub-scan-to-delimiter c p)))
                     (read (open-input-string (string-append "#\\" s)))))))))
-    
+
     (define (sub-read p)
       (define hc* '())
       (define form
@@ -205,7 +205,7 @@
                               (r-error p "invalid bytevector syntax")))
                          ((char=? c #\&)
                           (read-char p)
-                          (box (sub-read-carefully p)))                        
+                          (box (sub-read-carefully p)))
                          ((char=? c #\\) (read-char p) (sub-read-char p))
                          ((char-numeric? c)
                           (r-error p "#N=/#N# notation not supported"))
@@ -216,7 +216,7 @@
       (unless (reader-token? form)
         (decorate! form (reverse hc*) tc))
       form)
-    
+
     (define (sub-read-list p close-token dot?)
       (let ((form (sub-read p)))
         (if (eq? form dot)
@@ -237,7 +237,7 @@
                      (r-error p "error inside list:" (cdr form)))
                     ; this is the pair that will be in the final object
                     (else (cons form (recur (sub-read p)))))))))
-    
+
     ; body of read-decorated
     (let ((form (sub-read port)))
       (if (not (reader-token? form))
@@ -279,13 +279,13 @@
       (skip-while p (lambda (ch) (char=? ch #\;)))
       (and (eq? (read-or-eof p) magic0)
            (let ([kvs (parse-magic-kvs p)])
-             (and (eq? (read-or-eof p) magic0) 
+             (and (eq? (read-or-eof p) magic0)
                   (apply append kvs)))))))
 
 (define (parse-pretty-line line)
   (define (parse-pretty-kv p)
     (let* ([key (read-or-eof p)] [sep (read-or-eof p)] [val (read-or-eof p)])
-      (and (symbol? key) (eqv? sep ':=) 
+      (and (symbol? key) (eqv? sep ':=)
            (or (symbol? val) (and (pair? val) (eq? (car val) '_)))
            (cons key val))))
   (define (parse-pretty-kvs p)
@@ -307,10 +307,10 @@
                     kvs))))))
 
   ; pretty-printer that optionally uses decorated reader
-    
+
   (define (pprint-file ifn . rest)
-    (define-values (ofn kv*) 
-      (if (and (pair? rest) (string? (car rest))) 
+    (define-values (ofn kv*)
+      (if (and (pair? rest) (string? (car rest)))
           (values (car rest) (cdr rest))
           (values #f rest)))
     (define (getpar pp-xxx)
@@ -367,11 +367,11 @@
             (loop #f)))))
     (define pf (if decorate? decorated-pf plain-pf))
     (call-with-input-file ifn
-      (lambda (ip) 
+      (lambda (ip)
         (if (not ofn)
             (pf ip (current-output-port))
             (call-with-output-file ofn (lambda (op) (pf ip op)))))))
-  
+
   (define (html-emit s op)
     (let loop ((i 0) (n (string-length s)))
       (unless (>= i n)
@@ -382,12 +382,12 @@
             ((#\&) (write-string "&amp;" op))
             (else (write-char c op))))
         (loop (+ i 1) n))))
-    
+
   (define (html-color-mapper sc start?)
     (if start?
         (string-append "<span class=\"" (symbol->string sc) "\">")
         "</span>"))
-    
+
   ; assumes color-mapper is based on sgr palette
   (define (sc->fg-rgb sc cm)
     (define tier 3) ; get full rgb color
@@ -411,11 +411,11 @@
            (cond ((string=? s "1") 'bold)
                  ((string=? s "2") 'dim)
                  (else (parse-cs s))))))
-    
+
   (define (hex rgb)
     (let ((s (number->string rgb 16)))
       (string-append (make-string (- 6 (string-length s)) #\0) s)))
-  
+
   (define (sc->class-def sc cm)
     (define rgb (sc->fg-rgb sc cm))
     (cond ((number? rgb)
@@ -425,7 +425,7 @@
            (string-append "." (symbol->string sc) " { color: #"
              (hex 15527924) "; font-weight: bold; }"))
           (else #f)))
-    
+
   (define (display-class-defs cm op)
     (define sc*
       '(comment
@@ -449,7 +449,7 @@
         (let ((cds (sc->class-def (car sc*) cm)))
           (when (string? cds) (pr "  ") (pr cds) (pr "\n")))
         (loop (cdr sc*)))))
-    
+
   (define (display-html-header cm op)
     (define bg-rgb 1842982)
     (define fg-rgb 13948116)
@@ -473,30 +473,30 @@
     (prl "</head>")
     (prl "<body>")
     (pr "<pre>"))
-    
+
   (define (display-html-footer op)
     (define (pr s) (display s op))
     (define (prl s) (pr s) (pr "\n"))
     (prl "</pre>")
     (prl "</body>")
     (prl "</html>"))
-    
+
   ; map for Emacs-like file variables, mapped to parameters
   ; see https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html
   (define file-key-map
     `((pp-width: unquote pp-width)
-      (fill-column: unquote pp-width) ; Emacs standard 
+      (fill-column: unquote pp-width) ; Emacs standard
       (pp-inline-width: unquote pp-inline-width)
       (pp-miser-width: unquote pp-miser-width)
       (pp-tab: unquote pp-tab)
       (pp-max-tab: unquote pp-max-tab)
       (pp-brackets: unquote pp-brackets)))
-    
+
   ; reads input file, pretty-prints it to output file or current output
   ; top-level line comments are preserved, -*- line is recognized in the header
   (define (pprint-file/html ifn . rest)
-    (define-values (ofn kv*) 
-      (if (and (pair? rest) (string? (car rest))) 
+    (define-values (ofn kv*)
+      (if (and (pair? rest) (string? (car rest)))
           (values (car rest) (cdr rest))
           (values #f rest)))
     (define (getpar pp-xxx)
@@ -541,7 +541,7 @@
       (let loop ()
         (let ([obj (read ip)])
           (unless (eof-object? obj)
-            (pp* obj op pp-code #t pp-newline #t 
+            (pp* obj op pp-code #t pp-newline #t
                  pp-emit html-emit pp-color html-color-mapper
                  kv*)
             (newline op)
@@ -561,7 +561,7 @@
       (display-html-footer op))
     (define pf (if decorate? decorated-pf plain-pf))
     (call-with-input-file ifn
-      (lambda (ip) 
+      (lambda (ip)
         (if (not ofn)
             (pf ip (current-output-port))
             (call-with-output-file ofn (lambda (op) (pf ip op)))))))

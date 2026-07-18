@@ -7,7 +7,7 @@
 (library (srfi-272)
 
   (export
-    ; procedures 
+    ; procedures
     pp)
 
   (import

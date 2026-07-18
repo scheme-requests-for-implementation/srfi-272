@@ -236,7 +236,7 @@
   (test-cut 2 #f "#0=(#(#0#) . #0#)" "#0=(#(#0#) . #0#)\n")
   (test-cut 1 #f "#0=(#(#0#) . #0#)" "#0=(#(...) . #0#)\n")
   ; this is what Chez does:
-  ;(test-cut 2 2 "#0=(#1=(a b) #1# . #0#)" "#0=(#1=(a b) #1# . #0#)\n") 
+  ;(test-cut 2 2 "#0=(#1=(a b) #1# . #0#)" "#0=(#1=(a b) #1# . #0#)\n")
   ; I believe we're entitled to this:
   (test-cut 2 2 "#0=(#1=(a b) #1# . #0#)"
     "(#0=(a b) #0# ...)\n")
@@ -560,7 +560,7 @@
         (set-box! form (patch-shared! (unbox form)))
         (patch-shared! (unbox form))))))
     (define (patch-shared form) (patch-shared! form) form)
-    
+
     (define reader-token-marker #f)
     (define close-paren #f)
     (define close-bracket #f)
@@ -573,11 +573,11 @@
       (set! close-paren (cons rtm "right parenthesis"))
       (set! close-bracket (cons rtm "right bracket"))
       (set! dot (cons rtm "\" . \""))))
-    
+
     (define
      (reader-token? form)
      (and (pair? form) (eq? (car form) reader-token-marker)))
-    
+
     (define
      (char-hex-digit? c)
      (let
@@ -586,7 +586,7 @@
        (and (>= scalar-value 48) (<= scalar-value 57))
        (and (>= scalar-value 65) (<= scalar-value 70))
        (and (>= scalar-value 97) (<= scalar-value 102)))))
-    
+
     (define
      (char-delimiter? c)
      (or
@@ -598,7 +598,7 @@
       (char=? c #\")
       (char=? c #\|)
       (char=? c #\;)))
-    
+
     (define
      (sub-read-carefully p)
      (let
@@ -608,14 +608,14 @@
        ((reader-token? form)
         (r-error p "unexpected token:" (cdr form)))
        (else form))))
-    
+
     (define
      (sub-read-shebang p)
      (if
       (eqv? (peek-char p) #\space)
       (string->symbol (string-trim-whitespace (read-line p)))
       (sub-read-carefully p)))
-    
+
     (define
      (sub-read p)
      ; bumped code using %read-ahead builtin/instruction
@@ -820,7 +820,7 @@
               (else (r-error p "invalid terminator for #N notation"))))))
           (else (r-error p "unknown # syntax" c)))))
        (else (r-error p "illegal character read" c)))))
-    
+
     (define
      (sub-read-list c p close-token dot?)
      (let
@@ -849,7 +849,7 @@
          ((reader-token? form)
           (r-error p "error inside list --" (cdr form)))
          (else (cons form (recur (sub-read p)))))))))
-    
+
     (define
      (sub-read-numerical-list p ts)
      (unless
@@ -883,7 +883,7 @@
          p
          (format "invalid ~a inside ~avector --" ts ts)
          form)))))
-    
+
     (define
      (sub-read-strsym-char-escape p what)
      (let
@@ -911,7 +911,7 @@
            (read-char p)
            (loop (or gotnl (char=? nc #\newline)) (peek-char p))))))
        (else (r-error p "invalid char escape in" what ': c)))))
-    
+
     (define
      (sub-read-x-char-escape p in-string?)
      (define
@@ -941,7 +941,7 @@
        (else
         (read-char p)
         (loop (peek-char p) (cons c l) (+ cc 1))))))
-    
+
     ; body of %read
     (let
      ((form (sub-read port)))

@@ -7,9 +7,9 @@
 
 (define-library (srfi 272 measure)
   (import (scheme base) (scheme char))
-  
+
   (export char-width-procedure)
-  
+
   (begin
     (cond-expand
       (unicode
@@ -70,6 +70,6 @@
                  (else 1)))))
       (else
        (define (char-width ch) (if (char<=? #\space ch #\~) 1 #f))))
-    
+
     ; users can plug in their custom procedures
     (define char-width-procedure (make-parameter char-width))))

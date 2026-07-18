@@ -9,11 +9,11 @@
 
   (export char-width-procedure)
 
-  (import 
+  (import
     (rnrs base)
     (only (chezscheme) make-parameter))
-  
+
   (define (char-width ch) (if (char<=? #\space ch #\~) 1 #f))
-    
+
   ; users can plug in their custom procedures
   (define char-width-procedure (make-parameter char-width)))

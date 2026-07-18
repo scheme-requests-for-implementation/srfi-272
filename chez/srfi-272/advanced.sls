@@ -7,7 +7,7 @@
 (library (srfi-272 advanced)
 
 (export
-  ; procedures 
+  ; procedures
   pp pp* pprint pprint-shared pprint-simple pprint-file
   make-pprint-generator
   ; configuration
@@ -27,7 +27,7 @@
   (srfi-272 measure) (srfi-272 colorize)
   (only (chezscheme)
     box? box unbox set-box!
-    pretty-print pretty-file pretty-format 
+    pretty-print pretty-file pretty-format
     pretty-initial-indent pretty-line-length
     pretty-maximum-lines pretty-one-line-limit
     pretty-standard-indent
@@ -46,15 +46,15 @@
       (pperror "invalid value for pp-width" x)))
 ;(define pp-width (make-parameter 80 cv-width))
 (define pp-width pretty-line-length) ; remap
-    
+
 ; detect and mark cyclic substructure
 (define (cv-boolean x) (not (not x)))
 (define pp-circle (make-parameter #t cv-boolean))
-    
+
 ; detect and mark shared/cyclic substructure
 ;(define pp-graph (make-parameter #f cv-boolean))
 (define pp-graph print-graph) ; remap
-    
+
 ; radix for (at least) exact integers; 2, 8, 10, 16 are supported
 ; if not 10, prefix is printed when needed to keep numbers readable
 ; inexact numbers printed in a system-dependent machine-readable way
@@ -65,7 +65,7 @@
     [else (pperror "invalid value for pp-radix" x)]))
 ;(define pp-radix (make-parameter #f cv-radix))
 (define pp-radix print-radix) ; remap
-    
+
 ; #f or max numbers of subitems to display in a sequence
 (define (cv-length x)
   (if (or (not x) (and (number? x) (exact? x) (>= x 0)))
@@ -73,7 +73,7 @@
       (pperror "invalid value for pp-length" x)))
 ;(define pp-length (make-parameter #f cv-length)) ; no limit
 (define pp-length print-length) ; remap
-    
+
 ; a string to display when a sequence is cut short
 (define (cv-length-stub x)
   (if (string? x)
@@ -81,7 +81,7 @@
       (pperror "invalid value for pp-length-stub" x)))
 (define pp-length-stub
   (make-parameter "..." cv-length-stub))
-    
+
 ; #f or max depth of subitems to display in a sequence
 (define (cv-level x)
   (if (or (not x) (and (number? x) (exact? x) (>= x 0)))
@@ -89,7 +89,7 @@
       (pperror "invalid value for pp-level" x)))
 ;(define pp-level (make-parameter #f cv-level)) ; no limit
 (define pp-level print-level) ; remap
-    
+
 ; a string to display when a nested element is cut short
 ; #t value means "use Chez-like object shells"
 (define (cv-level-stub x)
@@ -97,7 +97,7 @@
       x
       (pperror "invalid value for pp-level-stub" x)))
 (define pp-level-stub (make-parameter #t cv-level-stub))
-    
+
 ; if not #f, cut the printing when N lines are printed
 (define (cv-lines x)
   (if (or (not x) (and (number? x) (exact? x) (>= x 1)))
@@ -105,7 +105,7 @@
       (pperror "invalid value for pp-lines" x)))
 ;(define pp-lines (make-parameter #f cv-lines)) ; no limit
 (define pp-lines pretty-maximum-lines) ; remap
-    
+
 ; a string to display when printing is cut short
 ; #t value means "use pp-length-stub with CL-like closers"
 (define (cv-lines-stub x)
@@ -113,7 +113,7 @@
       x
       (pperror "invalid value for pp-lines-stub" x)))
 (define pp-lines-stub (make-parameter ".." cv-lines-stub))
-    
+
 ; initial indent (first line assumption) -- call it pp-indent?
 (define (cv-indent x)
   (if (and (number? x) (exact? x) (>= x 0))
@@ -121,7 +121,7 @@
       (pperror "invalid value for pp-indent" x)))
 ;(define pp-indent (make-parameter 0 cv-indent))
 (define pp-indent pretty-initial-indent) ; remap
-    
+
 ; standard indentation within special forms in spaces
 ; from the start of the first subform after form's open paren
 ; if 0, all subforms are aligned vertically as in data printing
@@ -131,7 +131,7 @@
       (pperror "invalid value for pp-tab" x)))
 ;(define pp-tab (make-parameter 1 cv-tab))
 (define pp-tab pretty-standard-indent) ; remap
-    
+
 ; custom if-style aligned indentation for short symbols
 ; e.g. 4 allows vertically align args of 'if', 'or', 'and' but not 'cond'
 (define (cv-max-tab x)
@@ -139,7 +139,7 @@
       x
       (pperror "invalid value for pp-max-tab" x)))
 (define pp-max-tab (make-parameter 5 cv-max-tab))
-    
+
 ; #f or remaining amount of space before width to switch to the
 ; compact ('miser') printing mode with minimal indents
 (define (cv-miser-width x)
@@ -147,7 +147,7 @@
       x
       (pperror "invalid value for pp-miser-width" x)))
 (define pp-miser-width (make-parameter 20 cv-miser-width))
-    
+
 ; #f or max. length of an inline expression from its first char to last;
 ; if its length is longer than that, expression will print on multiple lines
 ; cf. Chez: pretty-one-line-limit, 50
@@ -157,52 +157,52 @@
       (pperror "invalid value for pp-inline-width" x)))
 ;(define pp-inline-width (make-parameter 60 cv-inline-width))
 (define pp-inline-width pretty-one-line-limit) ; remap
-    
+
 ; print square brackets around selected subforms
 ;(define pp-brackets (make-parameter #t cv-boolean))
 (define pp-brackets print-brackets) ; remap
-    
+
 ; print argument obj as code, opposed to data -- call it pp-as-code?
 (define pp-code (make-parameter #t cv-boolean))
-    
+
 ; if false, prints in a single line with 1 space for separation, observing all flags
 ; other than those related to spacing and line wrapping (pp-width and others)
 (define pp-pretty (make-parameter #t cv-boolean))
-    
+
 ; if #f, newline is NOT added to the last char of printed representation (cf. write)
 (define pp-newline (make-parameter #t cv-boolean))
-    
+
 ; #f (no color), #t (default color), or semantic color mapper
 (define (cv-color x)
   (cond [(or (not x) (semantic-color-mapper? x)) x]
         [(eq? x #t) default-semantic-color-mapper]
         [else (pperror "invalid value for pp-color" x)]))
 (define pp-color (make-parameter #f cv-color))
-    
+
 (define (cv-emit x)
   (if (procedure? x)
       x
       (pperror "invalid value for pp-emit" x)))
 (define pp-emit (make-parameter write-string cv-emit))
-    
+
 (define (cv-tint x)
   (if (procedure? x)
       x
       (pperror "invalid value for pp-tint" x)))
 (define pp-tint (make-parameter write-string cv-tint))
-    
+
 (define (cv-decorate x)
   (if (or (boolean? x) (procedure? x))
       x
       (pperror "invalid value for pp-decorate" x)))
 (define pp-decorate (make-parameter #t cv-decorate))
-    
+
 ; formatting style registry (opaque object)
 (define pp-styles (make-parameter '()))
-    
+
 (define (lookup-pp-style styles key)
   (cond [(assq key styles) => cdr] [else #f]))
-    
+
 ; style object validator
 (define (valid-style? obj)
   (define (valid-fmt-tail? x)
@@ -222,44 +222,44 @@
           (alist-addv key style styles)
           (pperror "invalid style object" style))
       (alist-remv key styles)))
-    
+
 ; public interface to formatting style registry
 (define pretty-style
   (case-lambda
     [(key) (lookup-pp-style (pp-styles) key)]
     [(key style)
      (pp-styles (add-pp-style (pp-styles) key style))]))
-    
-    
+
+
 ; predicate-based hooks for nonstandard data
 (define pp-hooks (make-parameter '()))
-    
+
 (define (lookup-pp-hook hooks test)
   (cond [(assv test hooks) => cdr] [else #f]))
-    
+
 ; adding a hook to the explicit hook registry
 (define (add-pp-hook hooks test . opt-hook)
   (define hook (if (null? opt-hook) #f (car opt-hook)))
   (if (assv test hooks)
       (alist-addv test hook hooks)
       (cons (cons test hook) hooks))) ; adds to front
-    
+
 ; generalized list hook constructor
 (define (glst-pp-hook pfx tolf toxf sfx)
   (list 'gl pfx tolf toxf sfx))
-    
+
 ; binary vector hook constructor
 (define (bvec-pp-hook pfx lenf reff sfx)
   (list 'bv pfx lenf reff sfx))
-    
+
 ; atomic hook constructor
 (define (atom-pp-hook sh? widf wrtf)
   (list 'at sh? widf wrtf))
-    
+
 ; generalized read macro hook constructor
 (define (rmac-pp-hook pfx reff tomf)
   (list 'rm pfx reff tomf))
-    
+
 ; convenient lookup/installation of hooks
 (define (pretty-hook pred . args)
   (let ([hooks (pp-hooks)])
@@ -268,25 +268,25 @@
         (cond [(eq? (car args) #t) (pp-hooks (add-pp-hook hooks pred))]
               [(eq? (car args) #f) (pp-hooks (alist-remv hooks pred))]
               [else (pp-hooks (add-pp-hook hooks pred (car args)))]))))
-    
-    
+
+
 ; portable eq table, similar to R6RS(?) eq-hashtable
-; NB: better use native eq hash table if available!   
-    
+; NB: better use native eq hash table if available!
+
 (define (make-eq-table) (cons 'table '()))
-    
+
 (define (table-ref ht key default)
   (cond [(assq key (cdr ht)) => cdr] [else default]))
-    
+
 (define (table-set! ht key val)
   (let ([pair (assq key (cdr ht))])
     (if pair
         (set-cdr! pair val)
         (set-cdr! ht (cons (cons key val) (cdr ht))))))
-    
-    
-; functional modifications of alists 
-    
+
+
+; functional modifications of alists
+
 (define (alist-addv key val alist)
   (let loop ([l alist])
     (cond [(null? l) (list (cons key val))]
@@ -295,7 +295,7 @@
           [else
            (let ([rest (loop (cdr l))])
              (if (eq? rest (cdr l)) l (cons (car l) rest)))])))
-    
+
 (define (alist-remv key alist)
   (let loop ([l alist])
     (cond [(null? l) alist]
@@ -303,7 +303,7 @@
           [else
            (let ([rest (loop (cdr l))])
              (if (eq? rest (cdr l)) l (cons (car l) rest)))])))
-    
+
 ; in Unicode setting takes 0-wide and 2-wide chars into account
 (define (string-width s)
   (define char-width (char-width-procedure))
@@ -313,9 +313,9 @@
         w
         (let* ([ch (string-ref s i)] [cw (char-width ch)])
           (loop (+ i 1) (+ w (or cw (if (char<? ch #\space) 2 7))))))))
-    
+
 (define (quoted-string-width s) (+ 2 (string-width s)))
-    
+
 ; width of written representation (slow but exact)
 ; TODO: use write-simple for chars? Old chibi fails to write
 ; control chars using their names
@@ -324,7 +324,7 @@
          [s (begin (write x p) (get-output-string p))])
     (close-output-port p)
     (string-width s)))
-    
+
 ; this list should contain rmacs supported by the reader by default
 ; fixme: add a way to space ,@ if followed by a symbol that starts with @
 (define builtin-read-macros
@@ -336,7 +336,7 @@
     (quasisyntax "#`" 1)
     (unsyntax "#," -1)
     (unsyntax-splicing "#,@" -1)))
-    
+
 ; the body of the formatter is embeded into pp to allow direct
 ; access to the external parameters through the local environment
 ; instead of threading them through the code
@@ -943,7 +943,7 @@
                     (emit " ")
                     (print*/fill (cdr x) (ind+ ind (+ 1 oplen)) (step v) 0
                       print-exp))
-                  (print*/fill x ind v (std-indent ind) 
+                  (print*/fill x ind v (std-indent ind)
                     (if kw? print-keyword print-exp) print-exp)))
             (print*/fill x ind v (std-indent ind) print-exp)))
       (emit-rpar)))
@@ -1131,7 +1131,7 @@
         (call/cc (lambda (k) (set! exit-handler k) (print x ind env)))
         (print x ind env))
     (when *newline* (emit-newline env))))
-    
+
 ; accepts a keyword-value list as last argument
 (define (pp* obj arg . args)
   (define (cons* arg . args)
@@ -1140,7 +1140,7 @@
           (car xs)
           (cons (car xs) (loop (cdr xs))))))
   (apply pp obj (apply cons* arg args)))
-    
+
 ; overrides pp-graph/pp-circle params; will hang on cycles
 ; this one is the fastest of them all
 (define (pprint-simple obj . rest)
@@ -1149,7 +1149,7 @@
         (values (car rest) (cdr rest))
         (values (current-output-port) rest)))
   (pp* obj port pp-graph #f pp-circle #f kv*))
-    
+
 ; overrides pp-graph/pp-circle params; only marks cycles
 ; spends time on detecting shared structures, and more on cycles
 (define (pprint obj . rest)
@@ -1158,7 +1158,7 @@
         (values (car rest) (cdr rest))
         (values (current-output-port) rest)))
   (pp* obj pp-graph #f pp-circle #t kv*))
-    
+
 ; overrides pp-graph/pp-circle param; marks all shared
 ; this one is actually faster than pprint
 (define (pprint-shared obj . rest)
@@ -1167,7 +1167,7 @@
         (values (car rest) (cdr rest))
         (values (current-output-port) rest)))
   (pp* obj port pp-graph #t pp-circle #t kv*))
-    
+
 ; map for Emacs-like file variables, mapped to parameters
 ; see https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html
 (define file-key-map
@@ -1180,7 +1180,7 @@
     (pp-brackets: unquote pp-brackets)))
 
 (define magic0 (string->symbol "-*-"))
-    
+
 ; reads input file, pretty-prints it to output file or current output
 ; top-level line comments are preserved, -*- line is recognized in the header
 (define (pprint-file ifn . rest)
@@ -1264,7 +1264,7 @@
       (if (not ofn)
           (pf ip (current-output-port))
           (call-with-output-file ofn (lambda (op) (pf ip op)))))))
-    
+
 (define (make-ppg sexp . kv*)
   (let ([return #f] [resume #f] [done #f])
     (define (emit s port)
@@ -1281,7 +1281,7 @@
                  (pp* sexp (current-output-port) pp-emit emit pp-tint tint kv*)
                  (set! done #t)
                  (return (eof-object))))]))))
-    
+
 (define (make-pprint-generator sexp . kv*)
   (define tint? #t)
   (let ([gen (apply make-ppg sexp kv*)] [l '()])
@@ -1295,10 +1295,10 @@
                (loop (gen))]
               [(string=? s "\n") (set! l (cons s l)) (line)]
               [else (set! l (cons s l)) (loop (gen))])))))
-    
-    
+
+
 ; initialize format pattern registry
-    
+
 (for-each
   (lambda (x) (pretty-style (car x) (cons '_ (cdr x))))
   '((lambda f . body)
@@ -1340,4 +1340,4 @@
     (with-syntax ec* . body)
     (identifier-syntax . ec*)))
 
-)    
+)

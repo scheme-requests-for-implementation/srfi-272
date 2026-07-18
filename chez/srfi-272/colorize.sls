@@ -6,7 +6,7 @@
 
 (library (srfi-272 colorize)
 
-  
+
 (export
   ; procedures
   detect-sgr-tier sgr0 sgr1 sgr2 sgr3 make-asb
@@ -17,11 +17,11 @@
   ; parameters
   sgr-support-tier)
 
-(import 
+(import
   (rnrs base) (rnrs control) (rnrs unicode)
   (only (rnrs r5rs) remainder quotient)
   (only (chezscheme) make-parameter getenv))
-  
+
     (define get-env getenv) ; r7rs: get-environment-variable
     (define (exact-integer? x) (and (integer? x) (exact? x)))
 
@@ -35,7 +35,7 @@
          (let* ((var (if (null? args) def (car args)))
                 (rest (if (null? args) '() (cdr args))))
            (let*-optionals rest more . body)))))
-    
+
     (define (string-contains-ci? hay needle)
       (let* ((h (string-downcase hay))
              (n (string-downcase needle))
@@ -45,38 +45,38 @@
           (cond ((> (+ i nn) hn) #f)
                 ((string=? n (substring h i (+ i nn))) i)
                 (else (loop (+ i 1)))))))
-    
+
     (define (string-suffix-ci? s suf)
       (let* ((s (string-downcase s))
              (suf (string-downcase suf))
              (n (string-length s))
              (m (string-length suf)))
         (and (>= n m) (string=? (substring s (- n m) n) suf))))
-    
+
     (define escape (string (integer->char 27)))
-    
+
     ; Env helpers
-    
+
     (define (in-env? name needle)
       (let ((v (get-env name)))
         (and v (string-contains-ci? v needle))))
-    
+
     (define (env-flag-true? name)
       (let ((v (get-env name)))
         (and v
              (let ((s (string-downcase v)))
                (or (string=? s "") (string=? s "1") (string=? s "true")
                    (string=? s "yes") (string=? s "on") (string=? s "always"))))))
-    
+
     (define (env-flag-false? name)
       (let ((v (get-env name)))
         (and v
              (let ((s (string-downcase v)))
                (or (string=? s "0") (string=? s "false") (string=? s "no")
                    (string=? s "off") (string=? s "never"))))))
-    
+
     ; Heuristics: capabilities
-    
+
     (define (truecolor-supported?)
       (let* ((term (or (get-env "TERM") ""))
              (term-low (string-downcase term)))
@@ -93,13 +93,13 @@
             (get-env "VTE_VERSION") (get-env "KONSOLE_VERSION")
             (in-env? "TERM_PROGRAM" "iTerm")
             (get-env "ITERM_SESSION_ID"))))
-    
+
     (define (colors256-supported?)
       (let* ((term (or (get-env "TERM") "")))
         (or (truecolor-supported?) (string-contains-ci? term "256color")
             (string-ci=? term "screen-256color")
             (string-ci=? term "tmux-256color"))))
-    
+
     ; conservative: mark only “known rich” terminals as Tier 3.
     (define (extended-sgr-supported?)
       (let* ((term (or (get-env "TERM") "")))
@@ -107,7 +107,7 @@
             (string-ci=? term "wezterm") (string-ci=? term "foot")
             (string-ci=? term "foot-extra")
             (in-env? "TERM_PROGRAM" "iTerm") (get-env "WT_SESSION"))))
-    
+
     ; disable conditions (return #f)
     (define (ansi-sgr-disallowed?)
       (let*
@@ -155,7 +155,7 @@
                (not force-on?))
               ; otherwise, allowed
               (else #f))))
-    
+
     ; returns one of: #f (no SGR at all), 0, 1, 2, 3
     (define (detect-sgr-tier)
       (let ((override (get-env "SGR_TIER")))
@@ -176,14 +176,14 @@
               ((truecolor-supported?) 2)
               ((colors256-supported?) 1)
               (else 0))))
-    
-    
+
+
     ; public parameter (can be set or parameterized)
-    
+
     (define sgr-support-tier (make-parameter (detect-sgr-tier)))
-    
+
     ; tier-specific SGR sequence generators
-    
+
     ; tier0-terminal sgr sequences
     (define (sgr0 fg16 . more)
       (define (fg i) (if (< i 8) (+ 30 i) (+ 90 (- i 8))))
@@ -199,7 +199,7 @@
            (bgs
             (if bg16 (string-append ";" (number->string (bg bg16))) "")))
           (string-append fgs bs us bgs))))
-    
+
     ; tier1-terminal sgr sequences
     (define (sgr1 fg256 . more)
       (let*-optionals more ((bold? #f) (uline? #f) (bg256 #f))
@@ -217,7 +217,7 @@
                 (string-append ";48;5;" (number->string bg256))
                 "")))
           (string-append fgs bs us bgs))))
-    
+
     ; tier2-terminal sgr sequences
     (define (sgr2 fgtrue . more)
       (define (rgbs rgb)
@@ -240,7 +240,7 @@
            (ss (if strike? ";9" ""))
            (bgs (if bgtrue (string-append ";48;2;" (rgbs bgtrue)) "")))
           (string-append fgs bs us is ss bgs))))
-    
+
     ; tier3-terminal sgr sequences
     (define (sgr3 fgtrue . more)
       (define (rgbs rgb sep)
@@ -285,26 +285,26 @@
            (bgs
             (if bgtrue (string-append ";48;2;" (rgbs bgtrue ";")) "")))
           (string-append fgs bs ds us is ss bgs))))
-    
-    
+
+
     ; ANSI SGR bundle allows to specify separate colors for color-limited,
-    ; paletted, and truecolor ttys. Rendering of base 16 colors depends on the 
-    ; current tty's color scheme, but usually does not deviate too far from 
+    ; paletted, and truecolor ttys. Rendering of base 16 colors depends on the
+    ; current tty's color scheme, but usually does not deviate too far from
     ; their original values, so red may shift, but will still remain red-like.
     ; Escape sequences for each tier can be generated via sgr0 .. sgr3 procedures;
     ; only sgr0 tier is required
-    
+
     (define make-asb
       (case-lambda
         ((s0) (vector s0 s0 s0 s0))
         ((s0 s1) (vector s0 s1 s1 s1))
         ((s0 s1 s2) (vector s0 s1 s2 s2))
         ((s0 s1 s2 s3) (vector s0 s1 s2 s3))))
-    
+
     (define asb-ref vector-ref)
-    
+
     ; rendering sgr bundle on screen depends on the value of (sgr-support-tier)
-    
+
     (define (asb->sgr-string asb . more)
       (unless (and (vector? asb) (= (vector-length asb) 4))
         (error "invalid ANSI SGR bundle" asb))
@@ -317,9 +317,9 @@
                  (string-append escape "[" (vector-ref asb tier) "m")
                  "")))
           (else (error "invalid ANSI SGR support tier" tier)))))
-    
+
     ; basic sgr bundles
-    
+
     (define default (make-asb #f #f #f #f)) ; default
     (define default-bold (make-asb "1" "1" "1" "1"))
     (define default-dim (make-asb "2" "2" "2" "2"))
@@ -327,18 +327,18 @@
       (make-asb (sgr0 0) (sgr1 0) (sgr2 0) (sgr3 0))) ; pitch black
     (define white
       (make-asb (sgr0 15) (sgr1 15) (sgr2 16777215) (sgr3 16777215))) ; blinding white
-    
+
     (define make-asb-palette
       (case-lambda
         ((b0 b1 b2 b3 b4 b5 b6 b7 b8)
          (vector b0 b1 b2 b3 b4 b5 b6 b7 b8 b1 b2 b3 b4 b5 b6 b7 white))
         ((b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15)
          (vector b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15))))
-    
+
     (define asb-palette-ref vector-ref)
-    
+
     ; default bundles and palettes
-    
+
     (define default-asb-palette
       (make-asb-palette
         (make-asb (sgr0 0) (sgr1 237) (sgr2 3883602) (sgr3 3883602))
@@ -358,9 +358,9 @@
         (make-asb (sgr0 14) (sgr1 109) (sgr2 9419963) (sgr3 9419963))
         (make-asb (sgr0 15) (sgr1 255) (sgr2 15527924)
           (sgr3 15527924))))
-    
+
     ; we use palettes as semantic colors -- but mappings vary
-    
+
     (define (default-sc->asb sc bpal)
       (case sc
         ((comment) (asb-palette-ref bpal 8))
@@ -385,21 +385,21 @@
         ((bracket) default)
         ((warning) (asb-palette-ref bpal 1))
         (else default)))
-    
-    
+
+
     ; mapper with a pallete combined into a single function
-    
+
     (define semantic-color-mapper? procedure?)
-    
+
     (define make-semantic-color-mapper
       (case-lambda
         ((bpal) (make-semantic-color-mapper bpal default-sc->asb))
         ((bpal sc->asb) (lambda (sc start?) (sc->asb sc bpal)))))
-    
+
     (define default-semantic-color-mapper
       (make-semantic-color-mapper default-asb-palette
         default-sc->asb))
-    
+
     (define (semantic-color->start-string sc . more)
       (let*-optionals more
         ((cm default-semantic-color-mapper) (tier (sgr-support-tier)))
@@ -407,7 +407,7 @@
           (cond ((string? cmr) cmr)
                 ((vector? cmr) (asb->sgr-string cmr tier))
                 (else "")))))
-    
+
     (define (semantic-color->end-string sc . more)
       (let*-optionals more
         ((cm default-semantic-color-mapper) (tier (sgr-support-tier)))
@@ -415,5 +415,5 @@
           (cond ((string? cmr) cmr)
                 ((and (vector? cmr) tier) (string-append escape "[0m"))
                 (else "")))))
-                
+
 )

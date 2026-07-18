@@ -6,7 +6,7 @@
 
 (library (srfi-272 intermediate)
 
-  (export 
+  (export
     ; procedures
     pp pp* pprint pprint-shared pprint-simple pprint-file
     ; parameters
@@ -19,14 +19,14 @@
     (rnrs mutable-pairs) (rnrs io simple) (rnrs io ports)
     (rnrs bytevectors) (rnrs exceptions) (rnrs conditions)
     (only (chezscheme)
-      pretty-print pretty-file pretty-format 
+      pretty-print pretty-file pretty-format
       pretty-initial-indent pretty-line-length
       pretty-maximum-lines pretty-one-line-limit
       pretty-standard-indent
       print-brackets print-graph print-length
       print-level print-radix
       make-parameter parameterize define-values))
-  
+
   ; remap parameters to existing ones
   (define pp-width pretty-line-length)
 
@@ -35,12 +35,12 @@
   ; and catch pretty-print's warning condition manually in pp
   (define pp-graph print-graph)
   (define pp-circle (make-parameter #t))
- 
+
   ; radix/length/level map directly
   (define pp-radix print-radix)
   (define pp-length print-length)
   (define pp-level print-level)
-  
+
   ; map pretty-style to Chez formatting style registry accessor
   (define pretty-style pretty-format)
 
@@ -51,9 +51,9 @@
           (values (car rest) (cdr rest))
           ; if port is not given as optional, look for the kw
           (values (current-output-port) rest)))
-        
+
     (define (print sexp)
-      (guard 
+      (guard
         (c [(warning? c)
             (if (and (not (pp-graph)) (pp-circle))
                 ; silently retry with pp-graph on
@@ -83,7 +83,7 @@
   ; accepts a keyword-value list as last argument
   (define (pp* obj arg . args)
     (apply pp obj (apply cons* arg args)))
-  
+
   ; overrides pp-graph/pp-circle params; will hang on cycles
   ; this one is the fastest of them all
   (define (pprint-simple obj . rest)
@@ -92,7 +92,7 @@
           (values (car rest) (cdr rest))
           (values (current-output-port) rest)))
     (pp* obj port pp-graph #f pp-circle #f kv*))
-  
+
   ; overrides pp-graph/pp-circle params; only marks cycles
   ; spends time on detecting shared structures, and more on cycles
   (define (pprint obj . rest)
@@ -101,7 +101,7 @@
           (values (car rest) (cdr rest))
           (values (current-output-port) rest)))
     (pp* obj pp-graph #f pp-circle #t kv*))
-  
+
   ; overrides pp-graph/pp-circle param; marks all shared
   ; this one is actually faster than pprint
   (define (pprint-shared obj . rest)
@@ -118,14 +118,14 @@
           (values #f rest)))
     (define (pf ip op)
       (let loop ((obj (read ip)))
-        (unless (eof-object? obj) 
+        (unless (eof-object? obj)
           (pp* obj op kv*)
-          (newline op) 
+          (newline op)
           (loop (read ip)))))
     (call-with-input-file ifn
       (lambda (ip)
         (if (not ofn)
             (pf ip (current-output-port))
-            (call-with-output-file ofn (lambda (op) (pf ip op)))))))  
+            (call-with-output-file ofn (lambda (op) (pf ip op)))))))
 
 )

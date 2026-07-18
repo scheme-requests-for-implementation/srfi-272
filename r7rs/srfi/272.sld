@@ -7,15 +7,15 @@
 (define-library (srfi 272)
   (import (scheme base) (scheme inexact) (scheme write))
   ; reenable box support by uncommenting #; comments
-  
+
   ; procedures
   (export pp)
-  
+
   (begin
     (define *width* 80)
-    
+
     ; basic formatting operations
-    
+
     ; guess print length of atoms -- better be fast than exact
     (define log10-of-2 2.302585092994046)
     (define (atom-width x)
@@ -38,28 +38,28 @@
                     (s (begin (write x p) (get-output-string p))))
                (close-output-port p)
                (string-length s)))))
-    
-    ; indentation ind is either an exact nonnegative integer or #f meaning 
+
+    ; indentation ind is either an exact nonnegative integer or #f meaning
     ; "we are printing inline code, so it doesn't matter"
-    
+
     ; safe increment for indentation (handles #f)
     (define (ind+ i n) (and i (+ i n)))
-    
+
     ; inserts single space if ind is #f; otherwise prints newline and indents to ind
     (define (space ind p)
       (cond ((not ind) (write-char #\space p))
             (else
              (newline p)
              (do ((i 0 (+ i 1))) ((>= i ind)) (write-char #\space p)))))
-    
+
     (define (abbrev? x)
       (and (pair? x) (pair? (cdr x)) (null? (cddr x))
            (memq (car x) '(quote quasiquote unquote unquote-splicing))))
-    
+
     ; output primitives
     (define (lpar p) (write-char #\( p))
     (define (rpar p) (write-char #\) p))
-    
+
     ; we calculate width on S-exps directly; this is far from exact,
     ; but should do for our purposes. Stops early if cap is reached,
     ; returning a value larger than cap. Doing it this way helps to
@@ -90,7 +90,7 @@
                        (and (fits? (vector-ref x i) cnt) (loop (+ i 1)))))))
               (else (cnt-sub cnt (atom-width x)))))
       (if (or (not ind) (fits? x (make-cnt ind))) #f ind))
-    
+
     (define (print-abbrev x ind p)
       (let ((abr (car x)) (arg (cadr x)))
         (case abr
@@ -101,7 +101,7 @@
         (let
           ((ind (ind+ ind (case abr ((unquote-splicing) 2) (else 1)))))
           (print-datum arg ind p))))
-    
+
     (define (print-pair-datum x ind p)
       (let ((ind (fit-ind x ind)))
         (lpar p)
@@ -113,7 +113,7 @@
           (unless first? (space ind p))
           (print-datum (car x) ind p))
         (rpar p)))
-    
+
     (define (print-vector-datum x ind p)
       (let ((ind (fit-ind x ind)) (vlen (vector-length x)))
         (write-char #\# p)
@@ -122,14 +122,14 @@
           (unless (zero? idx) (space ind p))
           (print-datum (vector-ref x idx) ind p))
         (rpar p)))
-    
-    
+
+
     (define (print-datum x ind p)
       (cond ((abbrev? x) (print-abbrev x ind p))
             ((pair? x) (print-pair-datum x ind p))
             ((vector? x) (print-vector-datum x ind p))
             (else (write x p))))
-    
+
     (define (pp x . rest)
       (define p
         (if (and (pair? rest) (output-port? (car rest)))

@@ -7,73 +7,73 @@
 (define-library (srfi 272 basic)
   (import (scheme base) (scheme inexact) (scheme cxr)
     (scheme write) (scheme case-lambda))
-  
+
   ; extra imports depending on library availability
   (cond-expand
     (skint (import (only (skint) box? box unbox)))
     (else))
-  
+
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
-  
+
   ; parameters
   (export pp-width pp-circle pp-graph)
-  
+
   (begin
     (define (conv-width x)
       (if (and (number? x) (exact? x) (> x 0))
           x
           (error "invalid value for pp-width" x)))
     (define pp-width (make-parameter 80 conv-width))
-    
+
     ; detect and mark cyclic substructure
     (define pp-circle (make-parameter #t))
-    
+
     ; detect and mark shared/cyclic substructure
     (define pp-graph (make-parameter #f))
-    
-    
+
+
     ; parameters (hidden)
-    
+
     ; predicate-based hooks for nonstandard data
     (define pp-hooks (make-parameter '()))
-    
+
     ; adding a hook to the explicit hook registry
     (define (add-pp-hook hooks pred . opt-hook)
       (define hook (if (null? opt-hook) #f (car opt-hook)))
       (if (assv pred hooks)
           (alist-addv pred hook hooks) ; replaces at its original pos
           (cons (cons pred hook) hooks))) ; adds to front
-    
+
     ; generalized list hook constructor
     (define (glist-pp-hook pfx tolf toxf sfx)
       (list 'gl pfx tolf toxf sfx))
-    
+
     ; binary vector hook constructor
     (define (bvec-pp-hook pfx lenf reff sfx)
       (list 'bv pfx lenf reff sfx))
-    
+
     ; atomic hook constructor
     (define (atom-pp-hook sh? widf wrtf)
       (list 'at sh? widf wrtf))
-    
-    
-    ; portable eq table, similar to R6RS(?) eq-hashtable   
-    
+
+
+    ; portable eq table, similar to R6RS(?) eq-hashtable
+
     (define (make-eq-table) (cons 'table '()))
-    
+
     (define (table-ref ht key default)
       (cond ((assq key (cdr ht)) => cdr) (else default)))
-    
+
     (define (table-set! ht key val)
       (let ((pair (assq key (cdr ht))))
         (if pair
             (set-cdr! pair val)
             (set-cdr! ht (cons (cons key val) (cdr ht))))))
-    
-    
-    ; functional modifications of alists 
-    
+
+
+    ; functional modifications of alists
+
     (define (alist-addv key val alist)
       (let loop ((l alist))
         (cond ((null? l) (list (cons key val)))
@@ -82,10 +82,10 @@
               (else
                (let ((rest (loop (cdr l))))
                  (if (eq? rest (cdr l)) l (cons (car l) rest)))))))
-    
-    
+
+
     ; locating hooks and calling handlers
-    
+
     (define (dispatch-on-type x retl retv reta)
       (let loop ((al (pp-hooks)))
         (cond ((null? al) ; dispatch on builtins
@@ -105,35 +105,35 @@
                      ((bv) (apply retv (cdr hk)))
                      ; atomic: atom-pp-hook sh? widf wrtf
                      ((at) (apply reta (cdr hk)))
-                     ; todo: pre-check, this shouldn't happen! 
+                     ; todo: pre-check, this shouldn't happen!
                      (else (error "invalid hook!"))))))
               (else (loop (cdr al))))))
-    
+
     ; graph sharing/cycles detection
-    
+
     ; SHARING and pp-graph parameter: if sharing detection and printing is requested
     ; via setting pp-graph parameter to #t, mark-shared is called with the input obj
     ; before doing anything else, then the marked obj is printed. The printer should
     ; always check for marks and measure/print them in #N= / #N# notation
-    
+
     ; if pp-graph is off, pp-circle determines if it is called with cycles-only? #t
     ; or not at all. If pp-graph is on, mark-shared is called with cycles-only? #f
-    
+
     (define unique (list 'shared-mark))
-    
+
     (define (shared-mark? x)
       (and (vector? x) (= (vector-length x) 4)
            (eq? (vector-ref x 0) unique)))
-    
+
     (define (shared-mark first? count x)
       (vector unique first? count x))
-    
+
     (define (shared-unmark m)
       (values (vector-ref m 1) (vector-ref m 2) (vector-ref m 3)))
-    
+
     (define (not-shareable? x)
       (or (symbol? x) (number? x) (boolean? x) (char? x)))
-    
+
     ; note: env is reserved for the future cutoofs & such
     (define (mark-shared sexp env cycles-only?)
       (let ((counts (make-eq-table)) (marks? #f))
@@ -205,10 +205,10 @@
                   (lambda (pfx lenf reff sfx) x) (lambda (sh? widf wrtf) x)))
               (rebuild sexp))
             sexp)))
-    
-    
+
+
     ; basic formatting operations
-    
+
     ; guess print length of atoms -- better be fast than exact
     ; call directly only in cases that don't need override
     (define log10-of-2 2.302585092994046)
@@ -232,19 +232,19 @@
                     (s (begin (write x p) (get-output-string p))))
                (close-output-port p)
                (string-length s)))))
-    
-    ; indentation ind is either an exact nonnegative integer or #f meaning 
+
+    ; indentation ind is either an exact nonnegative integer or #f meaning
     ; "we are printing inline code, so it doesn't matter"
-    
+
     ; safe increment for indentation (handles #f)
     (define (ind+ i n) (and i (+ i n)))
-    
+
     (define (abbrev? x)
       (and (pair? x) (pair? (cdr x)) (null? (cddr x))
            (memq (car x) '(quote quasiquote unquote unquote-splicing))))
-    
+
     ; we use parameters themselves as keys: they are unique procedures
-    ; note: pp only searches for and calls parameters it *knows*, not 
+    ; note: pp only searches for and calls parameters it *knows*, not
     ; arbitrary args!!
     (define (param-value args param . oconv)
       (define conv (if (pair? oconv) (car oconv) (lambda (x) x)))
@@ -253,7 +253,7 @@
               ((and (pair? (cdr a)) (eq? (car a) param)) (conv (cadr a)))
               ((and (pair? (cdr a)) (procedure? (car a))) (loop (cddr a)))
               (else (error "invalid pp parameter list" a)))))
-    
+
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
     ; instead of threading them through the code
@@ -263,12 +263,12 @@
             (values (car rest) (cdr rest))
             ; if port is not given as optional, look for the kw
             (values (current-output-port) rest)))
-      
+
       ; bring in all external parameters as lexical vars
       (define *width* (param-value kwargs pp-width conv-width))
       (define *circle* (param-value kwargs pp-circle))
       (define *graph* (param-value kwargs pp-graph))
-      
+
       ; shortcut output routines used below
       (define (emit s) (display s *port*))
       ; inserts single space if ind is #f; otherwise prints newline and indents to ind
@@ -278,7 +278,7 @@
                (newline *port*)
                (do ((i 0 (+ i 1))) ((>= i ind))
                  (write-char #\space *port*)))))
-      
+
       ; we calculate width on S-exps directly; this is far from exact,
       ; but should do for our purposes. Stops early if cap is reached,
       ; returning a value larger than cap. Doing it this way helps to
@@ -324,7 +324,7 @@
                      (fits-vector-like? x cnt pfx lenf reff sfx))
                    (lambda (sh? widf wrtf) (cnt-sub cnt (widf x)))))))
         (if (or (not ind) (fits? x (make-cnt ind))) #f ind))
-      
+
       (define (print-mark x ind v)
         (let-values (((first? id x) (shared-unmark x)))
           (emit "#")
@@ -333,7 +333,7 @@
           (when first?
             (let ((ilen (atom-width id)))
               (print-datum x (ind+ ind (+ ilen 2)) v)))))
-      
+
       (define (print-abbrev x ind v)
         (let ((abr (car x)) (arg (cadr x)))
           (case abr
@@ -345,7 +345,7 @@
           (let
             ((ind (ind+ ind (case abr ((unquote-splicing) 2) (else 1)))))
             (print-datum arg ind v))))
-      
+
       (define (print-list-like x ind v pfx lst sfx)
         (let ((ind (fit-ind x ind)))
           (emit pfx)
@@ -360,7 +360,7 @@
             (unless first? (space ind v))
             (print-datum (car lst) ind v))
           (emit sfx)))
-      
+
       (define (print-vector-like x ind v pfx lenf reff sfx)
         (let ((ind (fit-ind x ind)) (vlen (lenf x)))
           (emit pfx)
@@ -369,7 +369,7 @@
             (unless (zero? idx) (space ind v))
             (print-datum (reff x idx) ind v))
           (emit sfx)))
-      
+
       (define (print-datum x ind v)
         (cond ((shared-mark? x) (print-mark x ind v))
               ((abbrev? x) (print-abbrev x ind v))
@@ -380,37 +380,37 @@
                  (lambda (pfx lenf reff sfx)
                    (print-vector-like x ind v pfx lenf reff sfx))
                  (lambda (sh? widf wrtf) (wrtf x *port*))))))
-      
+
       (let* ((pg (if *graph* 2 (if *circle* 1 0)))
              (env 42) ; environment: reserved for the future
              (x (if (> pg 0) (mark-shared sexp env (= pg 1)) sexp)))
         (print-datum x 0 env)
         (newline *port*)))
-    
+
     ; ignores pp-graph/pp-circle params; will hang on cycles
     ; this one is the fastest of them all
     (define pprint-simple
       (case-lambda
         ((obj) (pp obj pp-graph #f pp-circle #f))
         ((obj port) (pp obj port pp-graph #f pp-circle #f))))
-    
+
     ; ignores pp-graph/pp-circle params; only marks cycles
     ; spends time on detecting shared structures, and more on cycles
     (define pprint
       (case-lambda
         ((obj) (pp obj pp-graph #f pp-circle #t))
         ((obj port) (pp obj port pp-graph #f pp-circle #t))))
-    
+
     ; ignores pp-graph/pp-circle param; marks all shared
     ; this one is actually faster than pprint
     (define pprint-shared
       (case-lambda
         ((obj) (pp obj pp-graph #t pp-circle #t))
         ((obj port) (pp obj port pp-graph #t pp-circle #t))))
-    
-    
+
+
     ; conditionally initialize format hook registry
-    
+
     (cond-expand
       (skint
        (pp-hooks

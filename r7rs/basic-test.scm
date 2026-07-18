@@ -82,14 +82,14 @@
 (pp-test 100 "#((#0=(a) #1=(b) #0#) #1#)"
   "#(((a) (b) (a)) (b))\n")
 
-(cond-expand 
+(cond-expand
   (skint
     ; boxes
     (pp-test 100 "#0=#&(#1=(a) #1# . #0#)"
       "#0=#&((a) (a) . #0#)\n")
     ; bytevectors
     (pp-test 10 "#u8(1 2 3 4 5 6 7 8 9 10)"
-      "#u8(1\n    2\n    3\n    4\n    5\n    6\n    7\n    8\n    9\n    10)\n")) 
+      "#u8(1\n    2\n    3\n    4\n    5\n    6\n    7\n    8\n    9\n    10)\n"))
   (else))
 
 ; shared graph tests
