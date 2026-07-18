@@ -18,7 +18,8 @@
     (skint
      (import
        (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref))))
+             numvector-ref)))
+    (else))
   
   ; procedures
   (export pp pp* pprint pprint-shared pprint-simple pprint-file)
@@ -129,6 +130,7 @@
     
     ; in Unicode setting takes 0-wide and 2-wide chars into account
     (define (string-width s)
+      (define char-width (char-width-procedure))
       (define n (string-length s))
       (let loop ((i 0) (w 0))
         (if (= i n)
@@ -645,7 +647,7 @@
         (let ((ind (fit-ind x ind v)))
           (emit-lpar)
           (let ((ind (ind+ ind 1)) (v (nest v)))
-            (if (and (symbol? (car x)) (pair? (cdr x)))
+            (if (and (symbol? (car x)) (pair? (cdr x)) (not (cuti? v)))
                 (let ((oplen (atom-width (car x))))
                   (if (< oplen (alt-indent ind)) ; ind = len + 1 space
                       (begin
@@ -757,7 +759,7 @@
                 (else (print/fmt (car fmt*) x ind v))))
         (define (prest x ind c v)
           (if (or (not ind) (and (csub c 3) (fitsi? x c v)))
-              (begin (emit " . ") (print x #f v))
+              (begin (emit " . ") (print-datum x #f v))
               (begin
                 (space ind v)
                 (emit ".")
@@ -937,7 +939,8 @@
        (for-each (lambda (x) (pretty-style (car x) (cdr x)))
          '((syntax-case _ e d . ec*)
            (with-syntax _ ec* . body)
-           (identifier-syntax _ . ec*)))))
+           (identifier-syntax _ . ec*))))
+      (else))
     
     ; conditionally initialize pp hook registry
     
@@ -963,6 +966,7 @@
                ((11)
                 (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
                ; TODO: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width write))))))))))
+               (else (atom-pp-hook #t written-width write)))))))
+      (else))))
 
 

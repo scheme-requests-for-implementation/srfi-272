@@ -23,7 +23,8 @@
     (skint
      (import
        (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref))))
+             numvector-ref)))
+    (else))
   
   
   ; procedures
@@ -154,8 +155,8 @@
     ; print square brackets around selected subforms
     (define pp-brackets (make-parameter #f cv-boolean))
     
-    ; print argument obj as code, opposed to data -- call it pp-as-code?
-    (define pp-code (make-parameter #f cv-boolean))
+    ; print argument obj as code, opposed to data
+    (define pp-code (make-parameter #t cv-boolean))
     
     ; if false, prints in a single line with 1 space for separation, observing all flags
     ; other than those related to spacing and line wrapping (pp-width and others)
@@ -191,10 +192,24 @@
     (define (lookup-pp-style styles key)
       (cond ((assq key styles) => cdr) (else #f)))
     
+    ; style object validator
+    (define (valid-style? obj)
+      (define (valid-fmt-tail? x)
+        (or (and (memq x '(body spread fill h* dc* ec* fc* lc*)) #t)
+            (and (pair? x) (eq? (car x) 'i?) (valid-fmt-tail? (cdr x)))
+            (and (pair? x) (valid-fmt? (car x)) (valid-fmt-tail? (cdr x)))))
+      (define (valid-fmt? x)
+        (or (and (memq x '(k i h d dc e ec f fc l lc)) #t)
+            (valid-fmt-tail? x)))
+      (and (pair? obj) (eq? (car obj) '_)
+           (valid-fmt-tail? (cdr obj))))
+    
     ; adding a style to the explicit hook registry
     (define (add-pp-style styles key style)
       (if style
-          (alist-addv key style styles)
+          (if (valid-style? style)
+              (alist-addv key style styles)
+              (error "invalid style object" style))
           (alist-remv key styles)))
     
     ; public interface to formatting style registry
@@ -300,13 +315,19 @@
         (close-output-port p)
         (string-width s)))
     
+    ; check if printing x without spacing would interfere with read macro
+    (define (interferes-with-splicing-macro? x)
+      (and (symbol? x)
+           (let ((s (symbol->string x)))
+             (and (> (string-length s) 0) (char=? (string-ref s 0) #\@)))))
+    
     ; this list should contain rmacs supported by the reader by default
-    ; fixme: add a way to space ,@ if followed by a symbol that starts with @
+    ; NB: last boolean param is hsv, "has splicing variant"
     (define builtin-read-macros
-      '((quote "'" 0)
-        (quasiquote "`" 1)
-        (unquote "," -1)
-        (unquote-splicing ",@" -1)))
+      '((quote "'" 0 #f)
+        (quasiquote "`" 1 #f)
+        (unquote "," -1 #t)
+        (unquote-splicing ",@" -1 #f)))
     
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
@@ -411,13 +432,14 @@
         (if (string? *level-stub*)
             (let ((w (string-width *level-stub*)))
               (lambda (x)
-                (dispatch-on-type x (lambda (pfx reff tomf dde) w)
+                (dispatch-on-type x (lambda (pfx reff tomf dde hsv) w)
                   (lambda (pfx tolf toxf sfx) w)
                   (lambda (pfx lenf reff sfx) w)
                   (lambda (sh? widf wrtf) (widf x))))) ; atom
             (lambda (x)
               (dispatch-on-type x
-                (lambda (pfx reff tomf dde) (+ (string-width pfx) cuti-wid))
+                (lambda (pfx reff tomf dde hsv)
+                  (+ (string-width pfx) cuti-wid))
                 (lambda (pfx tolf toxf sfx)
                   (+ (string-width pfx) cuti-wid (string-width sfx)))
                 (lambda (pfx lenf reff sfx)
@@ -499,7 +521,7 @@
         (if (string? *level-stub*) ; CL-like model
             (lambda (x bk?)
               (dispatch-on-type x
-                (lambda (pfx reff tomf dde) (emit *level-stub*))
+                (lambda (pfx reff tomf dde hsv) (emit *level-stub*))
                 (lambda (pfx tolf toxf sfx) (emit *level-stub*))
                 (lambda (pfx lenf reff sfx) (emit *level-stub*))
                 (lambda (sh? widf wrtf) (emit/wrtf wrtf x)))) ; atoms
@@ -508,7 +530,7 @@
               (cond ((and bk? (pair? x)) (emit-lbra) (emit-cuti) (emit-rbra))
                     (else
                      (dispatch-on-type x
-                       (lambda (pfx reff tomf dde) (emit pfx) (emit-cuti))
+                       (lambda (pfx reff tomf dde hsv) (emit pfx) (emit-cuti))
                        (lambda (pfx tolf toxf sfx)
                          (emit pfx)
                          (emit-cuti)
@@ -562,7 +584,8 @@
                              (assq (car x) builtin-read-macros))
                         =>
                         (lambda (l)
-                          (retm (cadr l) cadr (lambda (x) (list (car l) x)) (caddr l))))
+                          (retm (cadr l) cadr (lambda (x) (list (car l) x)) (caddr l)
+                                (cadddr l))))
                        ((pair? x) (retl "(" (lambda (x) x) (lambda (x) x) ")"))
                        ((vector? x) (retl "#(" vector->list list->vector ")"))
                        ((string? x) ; shareable atomic
@@ -604,7 +627,7 @@
           (let scan ((x sexp) (v env))
             (unless (not-shareable? x)
               (dispatch-on-type x
-                (lambda (pfx reff tomf dde)
+                (lambda (pfx reff tomf dde hsv)
                   (unless (cutd? v)
                     (let ((c (table-ref counts x 0)))
                       (table-set! counts x (+ c 1))
@@ -646,7 +669,7 @@
                          (let ((up (if (> c 1) (cons x up) up)))
                            (table-set! counts x 'visited)
                            (dispatch-on-type x
-                             (lambda (pfx reff tomf dde)
+                             (lambda (pfx reff tomf dde hsv)
                                (unless (cutd? v) (find-cycles (reff x) v up)))
                              (lambda (pfx tolf toxf sfx)
                                (unless (cutd? v)
@@ -675,7 +698,7 @@
                             (recur x v)))))
                 (define (recur x v)
                   (dispatch-on-type x
-                    (lambda (pfx reff tomf dde)
+                    (lambda (pfx reff tomf dde hsv)
                       (if (cutd? v)
                           x
                           (let* ((e (reff x)) (ne (rebuild e v)))
@@ -762,7 +785,7 @@
               ((cutd? v) (csub c (cutd-widf x)))
               (else
                (dispatch-on-type x
-                 (lambda (pfx reff tomf dde)
+                 (lambda (pfx reff tomf dde hsv)
                    (fits-read-macro? x c v pfx (reff x)))
                  (lambda (pfx tolf toxf sfx)
                    (fits-list-like? x c v pfx (tolf x) sfx))
@@ -791,9 +814,12 @@
             (let ((ilen (atom-width id)))
               (print x (ind+ ind (+ ilen 2)) v)))))
       
-      (define (print-read-macro x ind v pfx elt print)
+      (define (print-read-macro x ind v pfx hsv elt print)
+        (define sep
+          (and hsv (interferes-with-splicing-macro? elt) " "))
         (emit pfx)
-        (let ((ind (ind+ ind (string-width pfx))))
+        (when sep (emit sep))
+        (let ((ind (ind+ ind (+ (string-width pfx) (if sep 1 0)))))
           (print elt ind v))) ; Caveat: no nesting!
       
       ; fill-style printing of (possibly improper) list contents
@@ -876,7 +902,6 @@
         (define (fitsi? e c v)
           (if (cuti? v) (csub c cuti-wid) (fits? e c v)))
         (define (refi x i v) (if (cuti? v) 42 (reff x i)))
-        ;(when *dbg* (format #t "<<< ~s >>>~%" `(print-vector-like ,x ,pfx ,sfx)))
         (emit pfx)
         (let
           ((n (lenf x))
@@ -905,8 +930,8 @@
               ((cutd? v) (print-cutd x #f)) ; no brackets w/o fmt!
               (else
                (dispatch-on-type x
-                 (lambda (pfx reff tomf dde)
-                   (print-read-macro x ind v pfx (reff x) print-datum))
+                 (lambda (pfx reff tomf dde hsv)
+                   (print-read-macro x ind v pfx hsv (reff x) print-datum))
                  (lambda (pfx tolf toxf sfx)
                    (print-list-like x ind v pfx (tolf x) sfx print-datum))
                  (lambda (pfx lenf reff sfx)
@@ -926,8 +951,8 @@
               ((cutd? v) (print-cutd x #f)) ; no brackets w/o fmt!
               (else
                (dispatch-on-type x
-                 (lambda (pfx reff tomf dde)
-                   (print-read-macro x ind v pfx (reff x) print-literal))
+                 (lambda (pfx reff tomf dde hsv)
+                   (print-read-macro x ind v pfx hsv (reff x) print-literal))
                  (lambda (pfx tolf toxf sfx)
                    (print-list-like x ind v pfx (tolf x) sfx print-literal))
                  (lambda (pfx lenf reff sfx)
@@ -950,8 +975,9 @@
               ((cutd? v) (print-cutd x #f)) ; no brackets w/o fmt!
               (else
                (dispatch-on-type x
-                 (lambda (pfx reff tomf dde)
-                   (print-read-macro x ind v pfx (reff x) (subprt (+ de dde))))
+                 (lambda (pfx reff tomf dde hsv)
+                   (print-read-macro x ind v pfx hsv (reff x)
+                     (subprt (+ de dde))))
                  (lambda (pfx tolf toxf sfx)
                    (print-list-like x ind v pfx (tolf x) sfx (subprt de)))
                  (lambda (pfx lenf reff sfx)
@@ -994,7 +1020,7 @@
         (let ((ind (fit-ind x ind v)))
           (emit-lpar)
           (let ((ind (ind+ ind 1)) (v (nest v)))
-            (if (and (symbol? (car x)) (pair? (cdr x)))
+            (if (and (symbol? (car x)) (pair? (cdr x)) (not (cuti? v)))
                 (let ((oplen (atom-width (car x))))
                   (if (< oplen (alt-indent ind)) ; ind = len + 1 space
                       (begin
@@ -1004,7 +1030,8 @@
                         (emit " ")
                         (print*/fill (cdr x) (ind+ ind (+ 1 oplen)) (step v) 0
                           print-exp))
-                      (print*/fill x ind v (std-indent ind) print-exp)))
+                      (print*/fill x ind v (std-indent ind)
+                        (if kw? print-keyword print-exp) print-exp)))
                 (print*/fill x ind v (std-indent ind) print-exp)))
           (emit-rpar)))
       
@@ -1054,15 +1081,15 @@
               ((cutd? v) (print-cutd x #f)) ; no brackets w/o fmt!
               (else
                (dispatch-on-type x
-                 (lambda (pfx reff tomf dde)
+                 (lambda (pfx reff tomf dde hsv)
                    (cond ((<= dde 0)
                           (let ((sc (if (= dde 0) 'literal 'warning)))
                             (emit/sc-start sc)
-                            (print-read-macro x ind v pfx (reff x) print-datum)
+                            (print-read-macro x ind v pfx hsv (reff x) print-datum)
                             (emit/sc-end sc)))
                          (else
                           (emit/sc-start 'literal)
-                          (print-read-macro x ind v pfx (reff x)
+                          (print-read-macro x ind v pfx hsv (reff x)
                             (lambda (x ind v) (print-template x ind v dde)))
                           (emit/sc-end 'literal))))
                  (lambda (pfx tolf toxf sfx)
@@ -1181,7 +1208,6 @@
                           =>
                           (lambda (r)
                             (define indr (if (integer? r) (ind+ ind r) #f))
-                            ;(when *dbg* (format #t "<<< ~s >>>~%" `(ploop ,e ,c ,v ,ind ,ind1 ,indr)))
                             (space #f v)
                             (ploop l e v ind ind1 indr c (fmcdr fmt*))))
                          ((and (csub c 1) (fitsi? e c v))
@@ -1262,10 +1288,25 @@
         (if (and (pair? rest) (string? (car rest)))
             (values (car rest) (cdr rest))
             (values #f rest)))
-      (define decorate?
-        (cond ((memq pp-decorate kv*) =>
+      (define (getpar pp-xxx)
+        (cond ((memq pp-xxx kv*) =>
                (lambda (p) (and (pair? (cdr p)) (cadr p))))
-              (else (pp-decorate))))
+              (else (pp-xxx))))
+      (define color (getpar pp-color))
+      (define cm
+        (if (semantic-color-mapper? color)
+            color
+            default-semantic-color-mapper))
+      (define decorate? (getpar pp-decorate))
+      (define emit write-string) ; ignore overrides
+      (define tint write-string) ; ignore overrides
+      (define (copy-comment line op)
+        (when color
+          (tint (semantic-color->start-string 'comment cm) op))
+        (emit line op)
+        (when color
+          (tint (semantic-color->end-string 'comment cm) op))
+        (emit "\n" op))
       (define (parse-magic-line line)
         (define (skip-while p pred)
           (let ((c (peek-char p)))
@@ -1308,8 +1349,7 @@
                    (lambda (kvs)
                      (set! kv* (append kv* kvs))
                      (set! in-header? #f))))
-            (display line op)
-            (newline op)
+            (copy-comment line op)
             (copy-top-line-comments ip op in-header?))))
       (define (pf ip op)
         (let loop ((in-header? #t))
@@ -1389,7 +1429,7 @@
         (and . fill)
         (or . fill)
         (import . fill)
-        (delay e)
+        (delay . fill)
         (guard (f . ec*) . body)
         (case-lambda . fc*)
         (cond-expand . dc*)))
@@ -1401,16 +1441,17 @@
       (syntax-case
        (set! builtin-read-macros
          (append
-           '((syntax "#'" 0)
-             (quasisyntax "#`" 1)
-             (unsyntax "#," -1)
-             (unsyntax-splicing "#,@" -1))
+           '((syntax "#'" 0 #f)
+             (quasisyntax "#`" 1 #f)
+             (unsyntax "#," -1 #t)
+             (unsyntax-splicing "#,@" -1 #f))
            builtin-read-macros))
        (for-each
          (lambda (x) (pretty-style (car x) (cons '_ (cdr x))))
          '((syntax-case e d . ec*)
            (with-syntax ec* . body)
-           (identifier-syntax . ec*)))))
+           (identifier-syntax . ec*))))
+      (else))
     
     ; conditionally initialize pp hook registry
     
@@ -1436,6 +1477,7 @@
                ((11)
                 (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
                ; todo: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width (lambda (x radix) x)))))))))))
+               (else (atom-pp-hook #t written-width (lambda (x radix) x))))))))
+      (else))))
 
 

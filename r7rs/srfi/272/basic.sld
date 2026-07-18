@@ -5,11 +5,13 @@
 ; Basic Pretty Printing library
 
 (define-library (srfi 272 basic)
-  (import (scheme base) (scheme cxr) (scheme write)
-    (scheme case-lambda))
+  (import (scheme base) (scheme inexact) (scheme cxr)
+    (scheme write) (scheme case-lambda))
   
   ; extra imports depending on library availability
-  (cond-expand (skint (import (only (skint) box? box unbox))))
+  (cond-expand
+    (skint (import (only (skint) box? box unbox)))
+    (else))
   
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
@@ -414,4 +416,5 @@
        (pp-hooks
          (add-pp-hook (pp-hooks) box?
            (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) "")))))))
+             (lambda (x) (box (car x))) ""))))
+      (else))))

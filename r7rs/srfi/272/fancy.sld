@@ -16,15 +16,26 @@
   ; color support
   (import (srfi 272 colorize))
   
+  ; extra imports depending on library availability
+  ; TODO: add num vector srfis here
+  (cond-expand
+    (skint (import (only (skint) box? box unbox)))
+    (else))
+  
   ; procedures
   (export pp pp* pprint pprint-shared pprint-simple pprint-file
-    pprint-file/html pretty-style pretty-hook)
+    make-pprint-generator pprint-file/html)
+  
+  ; configuration
+  (export pretty-style lookup-pp-style add-pp-style pretty-hook
+    lookup-pp-hook add-pp-hook rmac-pp-hook glst-pp-hook
+    bvec-pp-hook atom-pp-hook)
   
   ; parameters
   (export pp-width pp-circle pp-graph pp-radix pp-length
     pp-level pp-lines pp-indent pp-tab pp-max-tab pp-miser-width
     pp-inline-width pp-brackets pp-code pp-pretty pp-newline
-    pp-color pp-emit pp-decorate pp-styles pp-hooks)
+    pp-color pp-emit pp-tint pp-decorate pp-styles pp-hooks)
   
   (begin
     (define *fold-case* #f)
@@ -215,7 +226,11 @@
                             (if (and (eq? (read-char p) #\8) (eq? (read-char p) lpar))
                                 (list->bytevector (sub-read-list p close-paren #f))
                                 (r-error p "invalid bytevector syntax")))
-                           ((char=? c #\&) (read-char p) (box (sub-read-carefully p)))
+                           ((char=? c #\&)
+                            (read-char p)
+                            (cond-expand
+                              (skint (box (sub-read-carefully p)))
+                              (else (r-error p "unexpected box syntax"))))
                            ((char=? c #\u)
                             (read-char p)
                             (if (and (eq? (read-char p) #\8) (eq? (read-char p) lpar))
@@ -260,6 +275,66 @@
             (r-error port "unexpected token:" (cdr form)))))
     
     
+    ; helpers for comment string parsing
+    
+    (define (skip-while p pred)
+      (let ((c (peek-char p)))
+        (when (and (not (eof-object? c)) (pred c))
+          (read-char p)
+          (skip-while p pred))))
+    
+    (define (read-or-eof p)
+      (define x (guard (ex (else (eof-object))) (read p)))
+      (case x ((t) #t) ((nil) #f) (else x)))
+    
+    (define (parse-magic-line line)
+      (define (parse-magic-kv p)
+        (let* ((key (read-or-eof p)) (m (assq key file-key-map)))
+          (and m
+               (let ((val (read-or-eof p)))
+                 (and (not (eof-object? val)) (list (cdr m) val))))))
+      (define (parse-magic-kvs p)
+        (let loop ((kvs '()))
+          (skip-while p char-whitespace?)
+          (if (eqv? (peek-char p) #\-)
+              (reverse kvs)
+              (let ((kv (parse-magic-kv p)))
+                (skip-while p char-whitespace?)
+                (when (eqv? (peek-char p) #\;) (read-char p))
+                (loop (if kv (cons kv kvs) kvs))))))
+      (call-with-port (open-input-string line)
+        (lambda (p)
+          (skip-while p (lambda (ch) (char=? ch #\;)))
+          (and (eq? (read-or-eof p) '-*-)
+               (let ((kvs (parse-magic-kvs p)))
+                 (and (eq? (read-or-eof p) '-*-) (apply append kvs)))))))
+    
+    (define (parse-pretty-line line)
+      (define (parse-pretty-kv p)
+        (let* ((key (read-or-eof p))
+               (sep (read-or-eof p))
+               (val (read-or-eof p)))
+          (and (symbol? key) (eqv? sep ':=)
+               (or (symbol? val) (and (pair? val) (eq? (car val) '_)))
+               (cons key val))))
+      (define (parse-pretty-kvs p)
+        (let loop ((kvs '()))
+          (skip-while p char-whitespace?)
+          (if (eof-object? (peek-char p))
+              (reverse kvs)
+              (let ((kv (parse-pretty-kv p)))
+                (skip-while p char-whitespace?)
+                (when (eqv? (peek-char p) #\;) (read-char p))
+                (loop (if kv (cons kv kvs) kvs))))))
+      (call-with-port (open-input-string line)
+        (lambda (p)
+          (skip-while p (lambda (ch) (char=? ch #\;)))
+          (and (eq? (read-or-eof p) '*)
+               (eq? (read-or-eof p) 'pp-styles:)
+               (let ((kvs (parse-pretty-kvs p)))
+                 (and (eof-object? (peek-char p)) kvs))))))
+    
+    
     ; pretty-printer that optionally uses decorated reader
     
     (define (pprint-file ifn . rest)
@@ -267,44 +342,37 @@
         (if (and (pair? rest) (string? (car rest)))
             (values (car rest) (cdr rest))
             (values #f rest)))
-      (define decorate?
-        (cond ((memq pp-decorate kv*) =>
+      (define (getpar pp-xxx)
+        (cond ((memq pp-xxx kv*) =>
                (lambda (p) (and (pair? (cdr p)) (cadr p))))
-              (else (pp-decorate))))
-      (define (parse-magic-line line)
-        (define (skip-while p pred)
-          (let ((c (peek-char p)))
-            (when (and (not (eof-object? c)) (pred c))
-              (read-char p)
-              (skip-while p pred))))
-        (define (read-or-eof p)
-          (define x (guard (ex (else (eof-object))) (read p)))
-          (case x ((t) #t) ((nil) #f) (else x)))
-        (define (parse-kv p)
-          (let* ((key (read-or-eof p)) (m (assq key file-key-map)))
-            (and m
-                 (let ((val (read-or-eof p)))
-                   (and (not (eof-object? val)) (list (cdr m) val))))))
-        (define (parse-kvs p)
-          (let loop ((kvs '()))
-            (skip-while p char-whitespace?)
-            (if (eqv? (peek-char p) #\-)
-                (reverse kvs)
-                (let ((kv (parse-kv p)))
-                  (skip-while p char-whitespace?)
-                  (when (eqv? (peek-char p) #\;) (read-char p))
-                  (loop (if kv (cons kv kvs) kvs))))))
-        (call-with-port (open-input-string line)
-          (lambda (p)
-            (skip-while p (lambda (ch) (char=? ch #\;)))
-            (and (eq? (read-or-eof p) '-*-)
-                 (let ((kvs (parse-kvs p)))
-                   (and (eq? (read-or-eof p) '-*-) (apply append kvs)))))))
+              (else (pp-xxx))))
+      (define styles (getpar pp-styles))
+      (define changed-styles? #f)
+      (define (copy-style! t&f)
+        (define (srcs s)
+          (if (symbol? s) (lookup-pp-style styles s) s))
+        (set! styles (add-pp-style styles (car t&f) (srcs (cdr t&f))))
+        (set! changed-styles? #t))
+      (define color (getpar pp-color))
+      (define cm
+        (if (semantic-color-mapper? color)
+            color
+            default-semantic-color-mapper))
+      (define decorate? (getpar pp-decorate))
+      (define emit write-string) ; ignore overrides
+      (define tint write-string) ; ignore overrides
       (define (copy-whitespace ip op)
         (let loop ((c (peek-char ip)))
           (when (and (char? c) (char-whitespace? c))
             (write-char (read-char ip) op)
             (loop (peek-char ip)))))
+      (define (copy-comment line op)
+        (when color
+          (tint (semantic-color->start-string 'comment cm) op))
+        (emit line op)
+        (when color
+          (tint (semantic-color->end-string 'comment cm) op))
+        (emit "\n" op))
       (define (copy-top-line-comments ip op in-header?)
         (copy-whitespace ip op)
         (when (eqv? (peek-char ip) #\;)
@@ -312,25 +380,33 @@
             (cond ((and in-header? (parse-magic-line line)) =>
                    (lambda (kvs)
                      (set! kv* (append kv* kvs))
-                     (set! in-header? #f))))
-            (display line op)
-            (newline op)
+                     (set! in-header? #f)))
+                  ((parse-pretty-line line) =>
+                   (lambda (kvs) (for-each copy-style! kvs))))
+            (copy-comment line op)
             (copy-top-line-comments ip op in-header?))))
-      (define (pf ip op)
+      (define (plain-pf ip op)
+        (let loop ()
+          (let ((obj (read ip)))
+            (unless (eof-object? obj)
+              (pp* obj op pp-code #t pp-newline #t kv*)
+              (newline op)
+              (loop)))))
+      (define (decorated-pf ip op)
         (let loop ((in-header? #t))
           (copy-top-line-comments ip op in-header?)
           (let-values (((obj decs) (read-decorated ip)))
             (unless (eof-object? obj)
               (pp* obj op pp-code #t pp-newline #t pp-decorate
-                   (lambda (x) (cond ((assq x decs) => cdr) (else #f))) kv*)
+                   (lambda (x) (cond ((assq x decs) => cdr) (else #f)))
+                   (if changed-styles? (cons pp-styles (cons styles kv*)) kv*))
               (loop #f)))))
-      (if (eq? decorate? #t)
-          (call-with-input-file ifn
-            (lambda (ip)
-              (if (not ofn)
-                  (pf ip (current-output-port))
-                  (call-with-output-file ofn (lambda (op) (pf ip op))))))
-          (apply advanced-pprint-file ifn rest)))
+      (define pf (if decorate? decorated-pf plain-pf))
+      (call-with-input-file ifn
+        (lambda (ip)
+          (if (not ofn)
+              (pf ip (current-output-port))
+              (call-with-output-file ofn (lambda (op) (pf ip op)))))))
     
     
     (define (html-emit s op)
@@ -460,81 +536,73 @@
         (if (and (pair? rest) (string? (car rest)))
             (values (car rest) (cdr rest))
             (values #f rest)))
-      (define decorate?
-        (cond ((memq pp-decorate kv*) =>
+      (define (getpar pp-xxx)
+        (cond ((memq pp-xxx kv*) =>
                (lambda (p) (and (pair? (cdr p)) (cadr p))))
-              (else (pp-decorate))))
+              (else (pp-xxx))))
+      (define styles (getpar pp-styles))
+      (define changed-styles? #f)
+      (define (copy-style! t&f)
+        (define (srcs s)
+          (if (symbol? s) (lookup-pp-style styles s) s))
+        (set! styles (add-pp-style styles (car t&f) (srcs (cdr t&f))))
+        (set! changed-styles? #t))
+      (define color (getpar pp-color))
       (define ccm
-        (let ((r (memq pp-color kv*)))
-          (if (and (pair? r) (pair? (cdr r)) (procedure? (cadr r)))
-              (cadr r)
-              (pp-color))))
-      (define cm (or ccm default-semantic-color-mapper))
-      (define (parse-magic-line line)
-        (define (skip-while p pred)
-          (let ((c (peek-char p)))
-            (when (and (not (eof-object? c)) (pred c))
-              (read-char p)
-              (skip-while p pred))))
-        (define (read-or-eof p)
-          (define x (guard (ex (else (eof-object))) (read p)))
-          (case x ((t) #t) ((nil) #f) (else x)))
-        (define (parse-kv p)
-          (let* ((key (read-or-eof p)) (m (assq key file-key-map)))
-            (and m
-                 (let ((val (read-or-eof p)))
-                   (and (not (eof-object? val)) (list (cdr m) val))))))
-        (define (parse-kvs p)
-          (let loop ((kvs '()))
-            (skip-while p char-whitespace?)
-            (if (eqv? (peek-char p) #\-)
-                (reverse kvs)
-                (let ((kv (parse-kv p)))
-                  (skip-while p char-whitespace?)
-                  (when (eqv? (peek-char p) #\;) (read-char p))
-                  (loop (if kv (cons kv kvs) kvs))))))
-        (call-with-port (open-input-string line)
-          (lambda (p)
-            (skip-while p (lambda (ch) (char=? ch #\;)))
-            (and (eq? (read-or-eof p) '-*-)
-                 (let ((kvs (parse-kvs p)))
-                   (and (eq? (read-or-eof p) '-*-) (apply append kvs)))))))
+        (if (semantic-color-mapper? color)
+            color
+            default-semantic-color-mapper))
+      (define cm html-color-mapper)
+      (define decorate? (getpar pp-decorate))
+      (define emit html-emit)
+      (define tint write-string)
       (define (copy-whitespace ip op)
         (let loop ((c (peek-char ip)))
           (when (and (char? c) (char-whitespace? c))
             (write-char (read-char ip) op)
             (loop (peek-char ip)))))
-      (define (copy-comment cs op)
-        (write-string
-          (semantic-color->start-string 'comment html-color-mapper)
-          op)
-        (html-emit cs op)
-        (write-string
-          (semantic-color->end-string 'comment html-color-mapper)
-          op)
-        (newline op))
+      (define (copy-comment line op)
+        (when color
+          (tint (semantic-color->start-string 'comment cm) op))
+        (emit line op)
+        (when color
+          (tint (semantic-color->end-string 'comment cm) op))
+        (emit "\n" op))
       (define (copy-top-line-comments ip op in-header?)
         (copy-whitespace ip op)
         (when (eqv? (peek-char ip) #\;)
           (let ((line (read-line ip)))
             (cond ((and in-header? (parse-magic-line line)) =>
                    (lambda (kvs)
-                     (set! kv* (append kvs kv*))
-                     (set! in-header? #f))))
+                     (set! kv* (append kv* kvs))
+                     (set! in-header? #f)))
+                  ((parse-pretty-line line) =>
+                   (lambda (kvs) (for-each copy-style! kvs))))
             (copy-comment line op)
             (copy-top-line-comments ip op in-header?))))
-      (define (pf ip op)
-        (display-html-header cm op)
+      (define (plain-pf ip op)
+        (display-html-header ccm op)
+        (let loop ()
+          (let ((obj (read ip)))
+            (unless (eof-object? obj)
+              (pp* obj op pp-code #t pp-newline #t pp-emit html-emit pp-color
+                   html-color-mapper kv*)
+              (newline op)
+              (loop))))
+        (display-html-footer op))
+      (define (decorated-pf ip op)
+        (display-html-header ccm op)
         (let loop ((in-header? #t))
-          (when decorate? (copy-top-line-comments ip op in-header?))
+          (copy-top-line-comments ip op in-header?)
           (let-values (((obj decs) (read-decorated ip)))
             (unless (eof-object? obj)
               (pp* obj op pp-code #t pp-newline #t pp-decorate
                    (lambda (x) (cond ((assq x decs) => cdr) (else #f))) pp-emit
-                   html-emit pp-color html-color-mapper kv*)
-              (unless decorate? (newline op))
+                   html-emit pp-color html-color-mapper
+                   (if changed-styles? (cons pp-styles (cons styles kv*)) kv*))
               (loop #f))))
         (display-html-footer op))
+      (define pf (if decorate? decorated-pf plain-pf))
       (call-with-input-file ifn
         (lambda (ip)
           (if (not ofn)

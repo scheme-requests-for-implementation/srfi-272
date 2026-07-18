@@ -5,7 +5,7 @@
 ; Bare-bones Pretty Printing library
 
 (define-library (srfi 272)
-  (import (scheme base) (scheme write))
+  (import (scheme base) (scheme inexact) (scheme write))
   ; reenable box support by uncommenting #; comments
   
   ; procedures
