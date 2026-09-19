@@ -9,6 +9,9 @@
     (scheme case-lambda) (scheme inexact) (scheme file)
     (scheme read) (scheme write))
 
+  ; Gauche's own keyword machinery, for the bridge below
+  (import (only (gauche base) keyword? make-keyword slot-ref))
+
   ; we need to be able to modify global parameters
   (import (srfi 39))
 
@@ -16,15 +19,6 @@
   (import (srfi 272 measure))
   ; color support
   (import (srfi 272 colorize))
-
-  ; extra imports depending on library availability
-  ; TODO: add num vector srfis here
-  (cond-expand
-    (skint
-     (import
-       (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref)))
-    (else))
 
 
   ; procedures
@@ -150,7 +144,8 @@
       (if (or (not x) (and (number? x) (exact? x) (>= x 0)))
           x
           (error "invalid value for pp-inline-width" x)))
-    (define pp-inline-width (make-parameter 60 cv-inline-width))
+    ; #f matches Gauche's own printer, which breaks only at the page width
+    (define pp-inline-width (make-parameter #f cv-inline-width))
 
     ; print square brackets around selected subforms
     (define pp-brackets (make-parameter #f cv-boolean))
@@ -332,12 +327,59 @@
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
     ; instead of threading them through the code
+    ; --- Gauche keyword arguments -------------------------------------------
+    ; Gauche's pprint takes its settings as keyword arguments while this SRFI
+    ; takes them as parameter objects.  The two cannot be confused, so pp and
+    ; its friends accept either, interleaved in any order; the port may be
+    ; given positionally or as :port; and a :controls object is unbundled into
+    ; whichever parameters this library has.  An explicit keyword beats a
+    ; :controls field, as it does in Gauche.  :circle and :graph have no
+    ; Gauche analogue and are this library's own addition.
+    ; The controls' pretty, radix and string-length fields are not unbundled:
+    ; Gauche's own pprint ignores pretty, and the other two have no analogue.
+    (define key:port (make-keyword 'port))
+    (define key:controls (make-keyword 'controls))
+    ; Gauche keyword -> this library's parameter
+    (define gauche-keys
+      (list (cons (make-keyword 'width) pp-width)
+            (cons (make-keyword 'circle) pp-circle)
+            (cons (make-keyword 'graph) pp-graph)
+            (cons (make-keyword 'length) pp-length)
+            (cons (make-keyword 'level) pp-level)
+            (cons (make-keyword 'indent) pp-indent)
+            (cons (make-keyword 'newline) pp-newline)))
+    ; <write-controls> slot -> this library's parameter
+    (define gauche-slots
+      (list (cons 'width pp-width)
+            (cons 'length pp-length)
+            (cons 'level pp-level)
+            (cons 'base pp-radix)
+            (cons 'indent pp-indent)))
+    (define (controls->kv c)
+      (let loop ((s gauche-slots) (kv '()))
+        (if (null? s)
+            (reverse kv)
+            (let ((v (slot-ref c (caar s))))
+              (loop (cdr s) (if v (cons v (cons (cdar s) kv)) kv))))))
+    (define (gauche-args rest)
+      (let loop ((a rest) (port #f) (nl #t) (kv '()) (ckv '()))
+        (cond
+          ((null? a) (values (or port (current-output-port)) (append (reverse kv) ckv)))
+          ((and (not port) (null? kv) (output-port? (car a)))
+           (loop (cdr a) (car a) nl kv ckv))
+          ((null? (cdr a)) (error "invalid pp parameter list" a))
+          ((eq? (car a) key:port) (loop (cddr a) (cadr a) nl kv ckv))
+          ((eq? (car a) key:controls)
+           (loop (cddr a) port nl kv (append ckv (controls->kv (cadr a)))))
+          ((keyword? (car a))
+           (let ((p (assq (car a) gauche-keys)))
+             (if p
+                 (loop (cddr a) port nl (cons (cadr a) (cons (cdr p) kv)) ckv)
+                 (error "unsupported Gauche keyword for this library" (car a)))))
+          (else (loop (cddr a) port nl (cons (cadr a) (cons (car a) kv)) ckv)))))
+
     (define (pp sexp . rest)
-      (define-values (*port* kv*)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            ; if port is not given as optional, look for the kw
-            (values (current-output-port) rest)))
+      (define-values (*port* kv*) (gauche-args rest))
 
       ; we use parameters themselves as keys: they are unique procedures
       ; note: pp only searches for and calls parameters it *knows*, not
@@ -1451,45 +1493,6 @@
          '((syntax-case e d . ec*)
            (with-syntax ec* . body)
            (identifier-syntax . ec*))))
-      (else))
-
-    ; conditionally initialize pp hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glst-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) "")))
-       (pp-hooks
-         (add-pp-hook (pp-hooks)
-           (lambda (x)
-             (case (numvector? x)
-               ((#f 0) #f)
-               ((1)
-                (bvec-pp-hook "#s8(" numvector-length numvector-ref ")"))
-               ((2)
-                (bvec-pp-hook "#u16(" numvector-length numvector-ref ")"))
-               ((3)
-                (bvec-pp-hook "#s16(" numvector-length numvector-ref ")"))
-               ((4)
-                (bvec-pp-hook "#u32(" numvector-length numvector-ref ")"))
-               ((5)
-                (bvec-pp-hook "#s32(" numvector-length numvector-ref ")"))
-               ((6)
-                (bvec-pp-hook "#u64(" numvector-length numvector-ref ")"))
-               ((7)
-                (bvec-pp-hook "#s64(" numvector-length numvector-ref ")"))
-               ((10)
-                (bvec-pp-hook "#f32(" numvector-length numvector-ref ")"))
-               ((11)
-                (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
-               ((14)
-                (bvec-pp-hook "#c64(" numvector-length numvector-ref ")"))
-               ((15)
-                (bvec-pp-hook "#c128(" numvector-length numvector-ref ")"))
-               ; todo: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width (lambda (x radix) x))))))))
       (else))))
 
 

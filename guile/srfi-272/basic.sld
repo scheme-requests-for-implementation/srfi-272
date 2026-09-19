@@ -4,14 +4,12 @@
 
 ; Basic Pretty Printing library
 
-(define-library (srfi 272 basic)
+(define-library (srfi-272 basic)
   (import (scheme base) (scheme inexact) (scheme cxr)
     (scheme write) (scheme case-lambda))
 
-  ; extra imports depending on library availability
-  (cond-expand
-    (skint (import (only (skint) box? box unbox)))
-    (else))
+  ; the one screen width Guile keeps; see pp-width below
+  (import (only (system repl debug) terminal-width))
 
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
@@ -21,10 +19,11 @@
 
   (begin
     (define (conv-width x)
-      (if (and (number? x) (exact? x) (> x 0))
+      ; 'terminal means: ask Guile, which keeps one screen width of its own
+      (if (or (eq? x 'terminal) (and (number? x) (exact? x) (> x 0)))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 conv-width))
+    (define pp-width (make-parameter 'terminal conv-width))
 
     ; detect and mark cyclic substructure
     (define pp-circle (make-parameter #t))
@@ -265,7 +264,14 @@
             (values (current-output-port) rest)))
 
       ; bring in all external parameters as lexical vars
-      (define *width* (param-value kwargs pp-width conv-width))
+      ; 'terminal means: take it from Guile's own notion of the screen width
+      (define *width*
+        (let ((w (param-value kwargs pp-width conv-width)))
+          (if (not (eq? w 'terminal))
+              w
+              ; COLUMNS, or what ,width last set, or Guile's own fallback
+              (let ((tw (terminal-width)))
+                (if (and (integer? tw) (exact? tw) (> tw 0)) tw 80)))))
       (define *circle* (param-value kwargs pp-circle))
       (define *graph* (param-value kwargs pp-graph))
 
@@ -407,14 +413,4 @@
       (case-lambda
         ((obj) (pp obj pp-graph #t pp-circle #t))
         ((obj port) (pp obj port pp-graph #t pp-circle #t))))
-
-
-    ; conditionally initialize format hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) ""))))
-      (else))))
+))

@@ -61,9 +61,11 @@
 (pp-test 40 "'(a b)" "'(a b)\n")
 (pp-test 40 "'(a . b)" "'(a . b)\n")
 (pp-test 40 "`(,a ,@b)" "`(,a ,@b)\n")
+; pp-inline-width defaults to #f here, so this stays on one line, as it does
+; under CHICKEN's own printer.
 (pp-test 80
   "(let ((x 1) (y 2) (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3)) (display x) (display y))"
-  "(let\n  ((x 1)\n   (y 2)\n   (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3))\n  (display x)\n  (display y))\n")
+  "(let ((x 1) (y 2) (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3))\n  (display x)\n  (display y))\n")
 
 ; graph cycles tests (default mode)
 (pp-test 40 "#0=(a . #0#)" "#0=(a . #0#)\n")
@@ -330,16 +332,6 @@
 (test-cut 0 1 "#0='#0#" "'...\n")
 (test-cut 1 0 "#0='#0#" "#0='#0#\n")
 (test-cut 1 1 "#0='#0#" "#0='#0#\n")
-
-; skint boxes increment level
-(cond-expand
-  (skint
-   (test-cut 3 4 "#&#&#&#&(3 . #(a b c d e f g))))" "#&#&#&#&...\n")
-   (test-cut 0 0 "#0=#&#0#" "#&...\n")
-   (test-cut 0 1 "#0=#&#0#" "#&...\n")
-   (test-cut 1 0 "#0=#&#0#" "#&...\n") ; Chez gives "#&#&...\n" !
-   (test-cut 1 1 "#0=#&#0#" "#&#&...\n"))
-  (else))
 
 (display "Done.")
 (newline)

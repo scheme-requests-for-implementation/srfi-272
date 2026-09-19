@@ -8,10 +8,12 @@
   (import (scheme base) (scheme inexact) (scheme cxr)
     (scheme write) (scheme case-lambda))
 
-  ; extra imports depending on library availability
-  (cond-expand
-    (skint (import (only (skint) box? box unbox)))
-    (else))
+  ; Gambit's own boxes, which it reads and writes as #&x
+  (import (only (gambit) box? box unbox))
+
+  ; Gambit has no global pretty-printing width; a port carries its own, which
+  ; is what Gambit's native pp goes by.  See pp-width below.
+  (import (only (gambit) output-port-width))
 
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
@@ -21,10 +23,11 @@
 
   (begin
     (define (conv-width x)
-      (if (and (number? x) (exact? x) (> x 0))
+      ; 'port means: ask the destination port, which is where Gambit keeps it
+      (if (or (eq? x 'port) (and (number? x) (exact? x) (> x 0)))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 conv-width))
+    (define pp-width (make-parameter 'port conv-width))
 
     ; detect and mark cyclic substructure
     (define pp-circle (make-parameter #t))
@@ -257,15 +260,29 @@
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
     ; instead of threading them through the code
-    (define (pp sexp . rest)
-      (define-values (*port* kwargs)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            ; if port is not given as optional, look for the kw
-            (values (current-output-port) rest)))
+    ; Gambit binds pp to a decompiler/pretty-printer combo: given a procedure it
+    ; prints the source it was compiled from.  Importing this library would take
+    ; that away, so the source is recovered here and printed by the code below,
+    ; which also gives it this library's controls.
+    (define (pp-subject obj)
+      (if (procedure? obj) (##decompile obj) obj))
+
+    (define (pp obj . rest)
+      (define sexp (pp-subject obj))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (output-port? (car rest))))
+      (define *port* (if given? (car rest) (current-output-port)))
+      (define kwargs (if given? (cdr rest) rest))
 
       ; bring in all external parameters as lexical vars
-      (define *width* (param-value kwargs pp-width conv-width))
+      (define *width*
+        ; 'port means: take it from where the output is going
+        (let ((w (param-value kwargs pp-width conv-width)))
+          (if (not (eq? w 'port))
+              w
+              ; a port that will not say keeps us on the conventional 80
+              (let ((pw (output-port-width *port*)))
+                (if (and (exact? pw) (> pw 0)) pw 80)))))
       (define *circle* (param-value kwargs pp-circle))
       (define *graph* (param-value kwargs pp-graph))
 
@@ -409,12 +426,8 @@
         ((obj port) (pp obj port pp-graph #t pp-circle #t))))
 
 
-    ; conditionally initialize format hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) ""))))
-      (else))))
+    ; Gambit reads and writes boxes as #&x, so print them that way
+    (pp-hooks
+      (add-pp-hook (pp-hooks) box?
+        (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
+          (lambda (x) (box (car x))) "")))))

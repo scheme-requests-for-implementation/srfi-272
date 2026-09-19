@@ -8,10 +8,8 @@
   (import (scheme base) (scheme inexact) (scheme cxr)
     (scheme write) (scheme case-lambda))
 
-  ; extra imports depending on library availability
-  (cond-expand
-    (skint (import (only (skint) box? box unbox)))
-    (else))
+  ; Gauche's own keyword machinery, for the bridge below
+  (import (only (gauche base) keyword? make-keyword slot-ref))
 
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
@@ -254,15 +252,56 @@
               ((and (pair? (cdr a)) (procedure? (car a))) (loop (cddr a)))
               (else (error "invalid pp parameter list" a)))))
 
+    ; --- Gauche keyword arguments -------------------------------------------
+    ; Gauche's pprint takes its settings as keyword arguments while this SRFI
+    ; takes them as parameter objects.  The two cannot be confused, so pp and
+    ; its friends accept either, interleaved in any order; the port may be
+    ; given positionally or as :port; and a :controls object is unbundled into
+    ; whichever parameters this library has.  An explicit keyword beats a
+    ; :controls field, as it does in Gauche.  :circle and :graph have no
+    ; Gauche analogue and are this library's own addition.
+    (define key:port (make-keyword 'port))
+    (define key:controls (make-keyword 'controls))
+    (define key:newline (make-keyword 'newline))
+    ; Gauche keyword -> this library's parameter
+    (define gauche-keys
+      (list (cons (make-keyword 'width) pp-width)
+            (cons (make-keyword 'circle) pp-circle)
+            (cons (make-keyword 'graph) pp-graph)))
+    ; <write-controls> slot -> this library's parameter
+    (define gauche-slots
+      (list (cons 'width pp-width)))
+    (define (controls->kv c)
+      (let loop ((s gauche-slots) (kv '()))
+        (if (null? s)
+            (reverse kv)
+            (let ((v (slot-ref c (caar s))))
+              (loop (cdr s) (if v (cons v (cons (cdar s) kv)) kv))))))
+    ; -> the port, the trailing-newline flag, and a kv-list of parameters only
+    (define (gauche-args rest)
+      (let loop ((a rest) (port #f) (nl #t) (kv '()) (ckv '()))
+        (cond
+          ((null? a)
+           (values (or port (current-output-port)) nl (append (reverse kv) ckv)))
+          ((and (not port) (null? kv) (output-port? (car a)))
+           (loop (cdr a) (car a) nl kv ckv))
+          ((null? (cdr a)) (error "invalid pp parameter list" a))
+          ((eq? (car a) key:port) (loop (cddr a) (cadr a) nl kv ckv))
+          ((eq? (car a) key:newline) (loop (cddr a) port (cadr a) kv ckv))
+          ((eq? (car a) key:controls)
+           (loop (cddr a) port nl kv (append ckv (controls->kv (cadr a)))))
+          ((keyword? (car a))
+           (let ((p (assq (car a) gauche-keys)))
+             (if p
+                 (loop (cddr a) port nl (cons (cadr a) (cons (cdr p) kv)) ckv)
+                 (error "unsupported Gauche keyword for this library" (car a)))))
+          (else (loop (cddr a) port nl (cons (cadr a) (cons (car a) kv)) ckv)))))
+
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
     ; instead of threading them through the code
     (define (pp sexp . rest)
-      (define-values (*port* kwargs)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            ; if port is not given as optional, look for the kw
-            (values (current-output-port) rest)))
+      (define-values (*port* *newline* kwargs) (gauche-args rest))
 
       ; bring in all external parameters as lexical vars
       (define *width* (param-value kwargs pp-width conv-width))
@@ -385,7 +424,7 @@
              (env 42) ; environment: reserved for the future
              (x (if (> pg 0) (mark-shared sexp env (= pg 1)) sexp)))
         (print-datum x 0 env)
-        (newline *port*)))
+        (when *newline* (newline *port*))))
 
     ; ignores pp-graph/pp-circle params; will hang on cycles
     ; this one is the fastest of them all
@@ -407,14 +446,4 @@
       (case-lambda
         ((obj) (pp obj pp-graph #t pp-circle #t))
         ((obj port) (pp obj port pp-graph #t pp-circle #t))))
-
-
-    ; conditionally initialize format hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) ""))))
-      (else))))
+))

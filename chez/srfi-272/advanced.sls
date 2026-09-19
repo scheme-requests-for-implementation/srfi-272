@@ -461,7 +461,7 @@
              (emit (if (string? *lines-stub*) *lines-stub* *length-stub*))
              (do ([t (cddr v) (cdr t)]) [(null? t)] (emit (car t))))
            (emit "\n")
-           (exit-handler)]
+           (exit-handler #f)]
           [else (emit "\n")]))
   (define (space ind v . osp)
     (define (indent)
@@ -675,7 +675,7 @@
                 (lambda (pfx lenf reff sfx) x) (lambda (sh? widf wrtf) x)))
             (rebuild sexp env))
           sexp)))
-  (define log10-of-2 2.302585092994046)
+  (define ln-of-10 2.302585092994046)
   (define (atom-width x)
     (cond [(or (null? x) (boolean? x)) 2]
           [(symbol? x) (string-width (symbol->string x))]
@@ -685,12 +685,12 @@
            (cond [(<= 0 x 9) 1]
                  [(<= -9 x 99) 2]
                  [(<= -99 x 999) 3]
-                 [(> x 0) (exact (ceiling (/ (log (+ x 0.1)) log10-of-2)))]
+                 [(> x 0) (exact (ceiling (/ (log (+ x 0.1)) ln-of-10)))]
                  [else
-                  (+ 1 (exact (ceiling (/ (log (- 0.1 x)) log10-of-2))))])]
+                  (+ 1 (exact (ceiling (/ (log (- 0.1 x)) ln-of-10))))])]
           [(and (= *radix* 10) (rational? x) (exact? x))
            (+ (atom-width (numerator x)) 1 (atom-width (denominator x)))]
-          [(memv x '((#\tab . 5) (#\newline . 9) (#\space . 7))) => cdr]
+          [(assv x '((#\tab . 5) (#\newline . 9) (#\space . 7))) => cdr]
           [(and (number? x) (exact? x) (not (= *radix* 10)))
            (+ 2 (string-length (number->string x *radix*)))]
           [else (written-width x)]))
@@ -706,7 +706,7 @@
       (and (csub c (+ (atom-width id) 2))
            (if first? (fits? val c v) (csub c 0)))))
   (define (fits-read-macro? x c v pfx elt)
-    (and (csub c (string-width pfx)) (fits-tail? elt c v)))
+    (and (csub c (string-width pfx)) (fits? elt c v)))
   (define (fits-tail? lst c v)
     (let loop ([sep 0] [l lst] [v v])
       (cond [(null? l) #t]
@@ -1157,7 +1157,7 @@
     (if (and (pair? rest) (output-port? (car rest)))
         (values (car rest) (cdr rest))
         (values (current-output-port) rest)))
-  (pp* obj pp-graph #f pp-circle #t kv*))
+  (pp* obj port pp-graph #f pp-circle #t kv*))
 
 ; overrides pp-graph/pp-circle param; marks all shared
 ; this one is actually faster than pprint

@@ -9,17 +9,11 @@
     (scheme case-lambda) (scheme inexact) (scheme file)
     (scheme read) (scheme write))
 
+  ; pp-width is this parameter; see below
+  (import (only (chicken pretty-print) pretty-print-width))
+
   ; char-width, returning #f 0 1 2
   (import (srfi 272 measure))
-
-  ; extra imports depending on library availability
-  ; TODO: add num vector srfis here
-  (cond-expand
-    (skint
-     (import
-       (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref)))
-    (else))
 
   ; procedures
   (export pp pp* pprint pprint-shared pprint-simple pprint-file)
@@ -36,7 +30,10 @@
       (if (and (number? x) (exact? x) (> x 0))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 cv-width))
+    ; remap: pp-width IS CHICKEN's own width parameter, so setting either
+    ; moves both, and (chicken pretty-print)'s pp follows this SRFI's pp
+    ;(define pp-width (make-parameter 80 cv-width))
+    (define pp-width pretty-print-width)
 
     ; detect and mark cyclic substructure
     (define (cv-boolean x) (not (not x)))
@@ -940,45 +937,6 @@
          '((syntax-case _ e d . ec*)
            (with-syntax _ ec* . body)
            (identifier-syntax _ . ec*))))
-      (else))
-
-    ; conditionally initialize pp hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) "")))
-       (pp-hooks
-         (add-pp-hook (pp-hooks)
-           (lambda (x)
-             (case (numvector? x)
-               ((#f 0) #f)
-               ((1)
-                (bvec-pp-hook "#s8(" numvector-length numvector-ref ")"))
-               ((2)
-                (bvec-pp-hook "#u16(" numvector-length numvector-ref ")"))
-               ((3)
-                (bvec-pp-hook "#s16(" numvector-length numvector-ref ")"))
-               ((4)
-                (bvec-pp-hook "#u32(" numvector-length numvector-ref ")"))
-               ((5)
-                (bvec-pp-hook "#s32(" numvector-length numvector-ref ")"))
-               ((6)
-                (bvec-pp-hook "#u64(" numvector-length numvector-ref ")"))
-               ((7)
-                (bvec-pp-hook "#s64(" numvector-length numvector-ref ")"))
-               ((10)
-                (bvec-pp-hook "#f32(" numvector-length numvector-ref ")"))
-               ((11)
-                (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
-               ((14)
-                (bvec-pp-hook "#c64(" numvector-length numvector-ref ")"))
-               ((15)
-                (bvec-pp-hook "#c128(" numvector-length numvector-ref ")"))
-               ; TODO: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width write)))))))
       (else))))
 
 

@@ -1392,13 +1392,13 @@ changes in behavior depend only on the parameter values, not on the method by wh
 <h2 id="implementation">Implementation</h2>
 
 <p>
-This SRFI's repository contains two sample implementations.
+This SRFI's repository contains six sample implementations.
 </p>
 
 <p>
   The first one is a portable R7RS implementation;
   its only external dependency is <code>(srfi 39)</code>, to ensure that parameters may be set globally
-  (R7RS does not provide a method for doing so). It is tested on Chibi Scheme and Skint. As an illustration
+  (R7RS does not provide a method for doing so). As an illustration
   of the size-to-functionality approach, the first three libraries have separate implementations that are only
   as large as their functionality requires; the advanced and fancy libraries share printer code.
 </p>
@@ -1408,6 +1408,55 @@ This SRFI's repository contains two sample implementations.
   in which the first three libraries adapt the functionality provided by Chez Scheme's regular pretty-printer.
   The advanced and fancy libraries use an independent printer implementation, but share the Chez Scheme
   printer's parameters (e.g., <code>pp-width</code> refers to the same binding as <code>pretty-line-length</code>).
+</p>
+
+<p>
+  The third one is for Gambit, which already binds <code>pp</code> to a procedure that
+  pretty-prints data and, given a procedure, prints the source it was compiled from. The
+  <code>(srfi 272)</code> library is that procedure repackaged, so importing it takes nothing
+  away. The richer libraries use the portable printer, each recovering the decompiled source
+  for itself, so that <code>pp</code> of a procedure still prints that source, now under this
+  SRFI's controls; their <code>pp-width</code> comes from the destination port, which is where
+  Gambit keeps it.
+</p>
+
+<p>
+  The fourth one is for Guile, whose <code>(ice-9 pretty-print)</code> procedure becomes
+  <code>(srfi 272)</code>; Guile binds no <code>pp</code> of its own, so nothing is shadowed.
+  The richer libraries use the portable printer, Guile's having no control beyond width and no
+  datum labels, and take <code>pp-width</code> from the screen width Guile keeps, which
+  <code>COLUMNS</code> and the REPL's <code>,width</code> feed. The library names had to give
+  way: following SRFI 97, Guile rewrites <code>(srfi <i>n</i> <i>name</i> ...)</code> onto the
+  single module <code>(srfi srfi-<i>n</i>)</code>, so this SRFI's libraries would all collide.
+  Only the bare-bones library keeps its name; the rest take a hyphen, as
+  <code>(srfi-272 basic)</code>, as does the Chez Scheme implementation.
+</p>
+
+<p>
+  The fifth one is for CHICKEN, and rests on the <code>r7rs</code> egg, which supplies the
+  library syntax and the R7RS procedures the core lacks; it is itself an egg, built and
+  installed by <code>chicken-install</code>. Its <code>(srfi 272)</code> library is the
+  <code>pp</code> of <code>(chicken pretty-print)</code>, which a program that has not imported
+  that module does not otherwise have. The richer libraries use the portable printer, but their
+  <code>pp-width</code> is <code>pretty-print-width</code> itself, so setting either moves both
+  and CHICKEN's own printer follows this SRFI's.
+</p>
+
+<p>
+  The sixth one is for Gauche, whose <code>pprint</code> becomes <code>(srfi 272)</code>,
+  widened to take the port positionally as well as by <code>:port</code>; Gauche binds no
+  <code>pp</code> of its own, so nothing is shadowed. The richer libraries use the portable
+  printer, since Gauche's offers no control over shared and circular structure, but they
+  accept Gauche's keyword arguments and its write-controls objects interleaved with this
+  SRFI's parameters, which cannot be confused with them, and they add <code>:circle</code>
+  and <code>:graph</code>, for which Gauche has no counterpart. Code written either way
+  works unchanged.
+</p>
+
+<p>
+  The sample implementations were tested on Chibi Scheme 0.11.0 and Skint 0.8.3 (the
+  portable one), Chez Scheme 9.5, Gambit 4.9.7, GNU Guile 3.0.11, CHICKEN 5.1.0 with the
+  <code>r7rs</code> egg 1.0.13, and Gauche 0.9.15.
 </p>
 
 <h2 id="acknowledgements">Acknowledgements</h2>

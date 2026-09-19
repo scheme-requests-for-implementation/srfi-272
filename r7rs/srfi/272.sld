@@ -17,7 +17,7 @@
     ; basic formatting operations
 
     ; guess print length of atoms -- better be fast than exact
-    (define log10-of-2 2.302585092994046)
+    (define ln-of-10 2.302585092994046)
     (define (atom-width x)
       (cond ((or (null? x) (boolean? x)) 2)
             ((symbol? x) (string-length (symbol->string x)))
@@ -27,12 +27,12 @@
              (cond ((<= 0 x 9) 1)
                    ((<= -9 x 99) 2)
                    ((<= -99 x 999) 3)
-                   ((> x 0) (exact (ceiling (/ (log (+ x 0.1)) log10-of-2))))
+                   ((> x 0) (exact (ceiling (/ (log (+ x 0.1)) ln-of-10))))
                    (else
-                    (+ 1 (exact (ceiling (/ (log (- 0.1 x)) log10-of-2)))))))
+                    (+ 1 (exact (ceiling (/ (log (- 0.1 x)) ln-of-10)))))))
             ((and (rational? x) (exact? x))
              (+ (atom-width (numerator x)) 1 (atom-width (denominator x))))
-            ((memv x '((#\tab . 5) (#\newline . 9) (#\space . 7))) => cdr)
+            ((assv x '((#\tab . 5) (#\newline . 9) (#\space . 7))) => cdr)
             (else
              (let* ((p (open-output-string)) ; slow but exact
                     (s (begin (write x p) (get-output-string p))))

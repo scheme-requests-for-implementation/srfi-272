@@ -8,10 +8,8 @@
   (import (scheme base) (scheme inexact) (scheme cxr)
     (scheme write) (scheme case-lambda))
 
-  ; extra imports depending on library availability
-  (cond-expand
-    (skint (import (only (skint) box? box unbox)))
-    (else))
+  ; pp-width is this parameter; see below
+  (import (only (chicken pretty-print) pretty-print-width))
 
   ; procedures
   (export pp pprint pprint-shared pprint-simple)
@@ -24,7 +22,10 @@
       (if (and (number? x) (exact? x) (> x 0))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 conv-width))
+    ; remap: pp-width IS CHICKEN's own width parameter, so setting either
+    ; moves both, and (chicken pretty-print)'s pp follows this SRFI's pp
+    ;(define pp-width (make-parameter 80 conv-width))
+    (define pp-width pretty-print-width)
 
     ; detect and mark cyclic substructure
     (define pp-circle (make-parameter #t))
@@ -407,14 +408,4 @@
       (case-lambda
         ((obj) (pp obj pp-graph #t pp-circle #t))
         ((obj port) (pp obj port pp-graph #t pp-circle #t))))
-
-
-    ; conditionally initialize format hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glist-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) ""))))
-      (else))))
+))

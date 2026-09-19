@@ -4,28 +4,21 @@
 
 ; Advanced Pretty Printing library
 
-(define-library (srfi 272 advanced)
+(define-library (srfi-272 advanced)
   (import (scheme base) (scheme char) (scheme cxr)
     (scheme case-lambda) (scheme inexact) (scheme file)
     (scheme read) (scheme write))
+
+  ; the one screen width Guile keeps; see pp-width below
+  (import (only (system repl debug) terminal-width))
 
   ; we need to be able to modify global parameters
   (import (srfi 39))
 
   ; char-width, returning #f 0 1 2
-  (import (srfi 272 measure))
+  (import (srfi-272 measure))
   ; color support
-  (import (srfi 272 colorize))
-
-  ; extra imports depending on library availability
-  ; TODO: add num vector srfis here
-  (cond-expand
-    (skint
-     (import
-       (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref)))
-    (else))
-
+  (import (srfi-272 colorize))
 
   ; procedures
   (export pp pp* pprint pprint-shared pprint-simple pprint-file
@@ -44,10 +37,11 @@
 
   (begin
     (define (cv-width x)
-      (if (and (number? x) (exact? x) (> x 0))
+      ; 'terminal means: ask Guile, which keeps one screen width of its own
+      (if (or (eq? x 'terminal) (and (number? x) (exact? x) (> x 0)))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 cv-width))
+    (define pp-width (make-parameter 'terminal cv-width))
 
     ; detect and mark cyclic substructure
     (define (cv-boolean x) (not (not x)))
@@ -150,7 +144,8 @@
       (if (or (not x) (and (number? x) (exact? x) (>= x 0)))
           x
           (error "invalid value for pp-inline-width" x)))
-    (define pp-inline-width (make-parameter 60 cv-inline-width))
+    ; #f matches Guile's own printer, which breaks only at the page width
+    (define pp-inline-width (make-parameter #f cv-inline-width))
 
     ; print square brackets around selected subforms
     (define pp-brackets (make-parameter #f cv-boolean))
@@ -351,7 +346,14 @@
                 (else (error "invalid pp parameter list" a)))))
 
       ; bring in all external parameters as lexical vars
-      (define *width* (kval kv* pp-width cv-width))
+      ; 'terminal means: take it from Guile's own notion of the screen width
+      (define *width*
+        (let ((w (kval kv* pp-width cv-width)))
+          (if (not (eq? w 'terminal))
+              w
+              ; COLUMNS, or what ,width last set, or Guile's own fallback
+              (let ((tw (terminal-width)))
+                (if (and (integer? tw) (exact? tw) (> tw 0)) tw 80)))))
       (define *circle* (kval kv* pp-circle cv-boolean))
       (define *graph* (kval kv* pp-graph cv-boolean))
       (define *radix* (or (kval kv* pp-radix cv-radix) 10))
@@ -1451,45 +1453,6 @@
          '((syntax-case e d . ec*)
            (with-syntax ec* . body)
            (identifier-syntax . ec*))))
-      (else))
-
-    ; conditionally initialize pp hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glst-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) "")))
-       (pp-hooks
-         (add-pp-hook (pp-hooks)
-           (lambda (x)
-             (case (numvector? x)
-               ((#f 0) #f)
-               ((1)
-                (bvec-pp-hook "#s8(" numvector-length numvector-ref ")"))
-               ((2)
-                (bvec-pp-hook "#u16(" numvector-length numvector-ref ")"))
-               ((3)
-                (bvec-pp-hook "#s16(" numvector-length numvector-ref ")"))
-               ((4)
-                (bvec-pp-hook "#u32(" numvector-length numvector-ref ")"))
-               ((5)
-                (bvec-pp-hook "#s32(" numvector-length numvector-ref ")"))
-               ((6)
-                (bvec-pp-hook "#u64(" numvector-length numvector-ref ")"))
-               ((7)
-                (bvec-pp-hook "#s64(" numvector-length numvector-ref ")"))
-               ((10)
-                (bvec-pp-hook "#f32(" numvector-length numvector-ref ")"))
-               ((11)
-                (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
-               ((14)
-                (bvec-pp-hook "#c64(" numvector-length numvector-ref ")"))
-               ((15)
-                (bvec-pp-hook "#c128(" numvector-length numvector-ref ")"))
-               ; todo: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width (lambda (x radix) x))))))))
       (else))))
 
 
