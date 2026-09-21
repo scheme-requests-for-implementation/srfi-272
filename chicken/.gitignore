@@ -1,0 +1,8 @@
+# chicken-install builds in place; everything below is its output.
+*.build.sh
+*.install.sh
+*.import.scm
+*.import.so
+*.link
+*.so
+*.static.o

@@ -2,15 +2,35 @@
 ;
 ; SPDX-License-Identifier: MIT
 
-;; -*- mode: scheme; fill-column: 90; pp-inline-width: 70; pp-max-tab: 5 -*-
-
 (import (scheme base) (scheme read) (scheme write))
-(import (srfi 272 fancy))
-(import (srfi 272 colorize))
+(import (srfi 272 intermediate))
+
+; Gauche's reader loops forever on one datum used below: a list that both holds
+; a reference to itself and ends in a self-referential tail.  It is not this
+; SRFI's doing -- the minimal case is #0=(#0# . #1=(e . #1#)) -- so the datum is
+; built here by hand and everything else is read as usual.
+(define hard-graph-source
+  "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))")
+
+(define (hard-graph)
+  (let* ((v2 (vector #f 'c))
+         (l1 (cons 'b v2))
+         (l3 (list 'e))
+         (l0 (list 'a l1 (cons v2 'd) #f)))
+    (vector-set! v2 0 l1)
+    (set-cdr! l3 l3)
+    (set-car! (cdr (cdr (cdr l0))) l0)
+    (set-cdr! (cdr (cdr (cdr l0))) l3)
+    l0))
+
+(define (read-datum input)
+  (if (string=? input hard-graph-source)
+      (hard-graph)
+      (read (open-input-string input))))
 
 (define (pp-test llen input expected)
   (let ((p (open-output-string)))
-    (pp (read (open-input-string input)) p pp-width llen)
+    (pp (read-datum input) p pp-width llen)
     (let ((actual (get-output-string p)))
       (if (string=? actual expected)
           (begin (display "PASS: ") (display input) (newline))
@@ -29,7 +49,7 @@
 
 (define (test-cut level length input expected)
   (let*
-    ((obj (let ((p (open-input-string input))) (read p)))
+    ((obj (read-datum input))
      (actual
       (parameterize ((pp-level level) (pp-length length))
         (let ((p (open-output-string)))
@@ -91,20 +111,26 @@
 (pp-test 100 "(#0=(a . #0#) #1=(b c) #1#)"
   "(#0=(a . #0#) (b c) (b c))\n")
 (pp-test 100 "#0=(a . (#1=(b) . #0#))" "#0=(a (b) . #0#)\n")
-(pp-test 100 "#0=(#(#1=(a b) #1#) . #0#)" "#0=(#((a b) (a b)) . #0#)\n")
-(pp-test 100 "(#0=(a . #0#) #1=#(#1#))" "(#0=(a . #0#) #1=#(#1#))\n")
-(pp-test 100 "#0=(#1=(a . #0#) #1#)" "#0=((a . #0#) (a . #0#))\n")
+(pp-test 100 "#0=(#(#1=(a b) #1#) . #0#)"
+  "#0=(#((a b) (a b)) . #0#)\n")
+(pp-test 100 "(#0=(a . #0#) #1=#(#1#))"
+  "(#0=(a . #0#) #1=#(#1#))\n")
+(pp-test 100 "#0=(#1=(a . #0#) #1#)"
+  "#0=((a . #0#) (a . #0#))\n")
 (pp-test 100 "(1 2 3)" "(1 2 3)\n")
 (pp-test 100 "(#0=(a) #0#)" "((a) (a))\n")
 (pp-test 100 "#0=(a . #0#)" "#0=(a . #0#)\n")
-(pp-test 100 "(#0=(a) #1=(b . #1#) #0#)" "((a) #0=(b . #0#) (a))\n")
+(pp-test 100 "(#0=(a) #1=(b . #1#) #0#)"
+  "((a) #0=(b . #0#) (a))\n")
 (pp-test 100 "#(#0=#(1) #0#)" "#(#(1) #(1))\n")
 (pp-test 100 "#0=#(#0#)" "#0=#(#0#)\n")
 (pp-test 100 "(#0=(1 . #0#) #1=(2 . #1#))"
   "(#0=(1 . #0#) #1=(2 . #1#))\n")
-(pp-test 100 "#0=(#1=(a . #0#) . #1#)" "#0=((a . #0#) a . #0#)\n")
+(pp-test 100 "#0=(#1=(a . #0#) . #1#)"
+  "#0=((a . #0#) a . #0#)\n")
 (pp-test 100 "(#0=(a . #0#) #0#)" "(#0=(a . #0#) #0#)\n")
-(pp-test 100 "#((#0=(a) #1=(b) #0#) #1#)" "#(((a) (b) (a)) (b))\n")
+(pp-test 100 "#((#0=(a) #1=(b) #0#) #1#)"
+  "#(((a) (b) (a)) (b))\n")
 
 ; shared graph tests
 (parameterize ((pp-graph #t))
@@ -129,23 +155,28 @@
   (pp-test 100 "(#0=(a . #0#) #0#)" "(#0=(a . #0#) #0#)\n")
   (pp-test 100 "#0=#(#0#)" "#0=#(#0#)\n")
   (pp-test 100 "(#0=(a b) #0#)" "(#0=(a b) #0#)\n")
-  (pp-test 100 "#0=(#1=(a) #1# . #0#)" "#0=(#1=(a) #1# . #0#)\n")
+  (pp-test 100 "#0=(#1=(a) #1# . #0#)"
+    "#0=(#1=(a) #1# . #0#)\n")
   (pp-test 100 "(#0=(a . #0#) #1=(b c) #1#)"
     "(#0=(a . #0#) #1=(b c) #1#)\n")
   (pp-test 100 "#0=(a . (#1=(b) . #0#))" "#0=(a (b) . #0#)\n")
   (pp-test 100 "#0=(#(#1=(a b) #1#) . #0#)"
     "#0=(#(#1=(a b) #1#) . #0#)\n")
-  (pp-test 100 "(#0=(a . #0#) #1=#(#1#))" "(#0=(a . #0#) #1=#(#1#))\n")
-  (pp-test 100 "#0=(#1=(a . #0#) #1#)" "#0=(#1=(a . #0#) #1#)\n")
+  (pp-test 100 "(#0=(a . #0#) #1=#(#1#))"
+    "(#0=(a . #0#) #1=#(#1#))\n")
+  (pp-test 100 "#0=(#1=(a . #0#) #1#)"
+    "#0=(#1=(a . #0#) #1#)\n")
   (pp-test 100 "(1 2 3)" "(1 2 3)\n")
   (pp-test 100 "(#0=(a) #0#)" "(#0=(a) #0#)\n")
   (pp-test 100 "#0=(a . #0#)" "#0=(a . #0#)\n")
-  (pp-test 100 "(#0=(a) #1=(b . #1#) #0#)" "(#0=(a) #1=(b . #1#) #0#)\n")
+  (pp-test 100 "(#0=(a) #1=(b . #1#) #0#)"
+    "(#0=(a) #1=(b . #1#) #0#)\n")
   (pp-test 100 "#(#0=#(1) #0#)" "#(#0=#(1) #0#)\n")
   (pp-test 100 "#0=#(#0#)" "#0=#(#0#)\n")
   (pp-test 100 "(#0=(1 . #0#) #1=(2 . #1#))"
     "(#0=(1 . #0#) #1=(2 . #1#))\n")
-  (pp-test 100 "#0=(#1=(a . #0#) . #1#)" "#0=(#1=(a . #0#) . #1#)\n")
+  (pp-test 100 "#0=(#1=(a . #0#) . #1#)"
+    "#0=(#1=(a . #0#) . #1#)\n")
   (pp-test 100 "(#0=(a . #0#) #0#)" "(#0=(a . #0#) #0#)\n")
   (pp-test 100 "#((#0=(a) #1=(b) #0#) #1#)"
     "#((#0=(a) #1=(b) #0#) #1#)\n"))
@@ -163,8 +194,10 @@
 (test-cut 1 2 "(a b . c)" "(a b . c)\n")
 (test-cut 2 10 "((a b) (c d))" "((a b) (c d))\n")
 (test-cut 2 10 "(((a)) b)" "(((...)) b)\n")
-(test-cut 2 10 "#(#(a b) #(c #(d)))" "#(#(a b) #(c #(...)))\n")
-(test-cut 2 2 "((a b c) (d e f) (g h i))" "((a b ...) (d e ...) ...)\n")
+(test-cut 2 10 "#(#(a b) #(c #(d)))"
+  "#(#(a b) #(c #(...)))\n")
+(test-cut 2 2 "((a b c) (d e f) (g h i))"
+  "((a b ...) (d e ...) ...)\n")
 (test-cut 2 2 "#((a b c) (d e f) (g h i))"
   "#((a b ...) (d e ...) ...)\n")
 (test-cut 2 3 "(a (b c d e) f g)" "(a (b c d ...) f ...)\n")
@@ -199,8 +232,10 @@
 (test-cut 1 1 "((a b) (c d))" "((...) ...)\n")
 (test-cut 2 1 "(((a) b) c)" "(((...) ...) ...)\n")
 (test-cut 0 0 "(a b c)" "(...)\n")
-(test-cut 1 2 "((a b c) (d e f) (g h i))" "((...) (...) ...)\n")
-(test-cut 1 2 "#(#(a b c) #(d e f) #(g h i))" "#(#(...) #(...) ...)\n")
+(test-cut 1 2 "((a b c) (d e f) (g h i))"
+  "((...) (...) ...)\n")
+(test-cut 1 2 "#(#(a b c) #(d e f) #(g h i))"
+  "#(#(...) #(...) ...)\n")
 (test-cut 1 #f "(a b . #(c d))" "(a b . #(...))\n")
 (test-cut 1 #f "((a . b) . c)" "((...) . c)\n")
 
@@ -214,23 +249,28 @@
   (test-cut 2 #f "#0=(#(a #0#) b)" "(#(a (...)) b)\n")
   (test-cut 1 #f "#0=(#(a #0#) b)" "(#(...) b)\n")
   (test-cut 2 1 "#0=(#(a #0#) b)" "(#(a ...) ...)\n")
-  (test-cut 2 #f "(#0=(a . b) #0# . #0#)" "(#0=(a . b) #0# . #0#)\n")
-  (test-cut 1 #f "(#0=(a . b) #0# . #0#)" "((...) (...) a . b)\n")
-  (test-cut 3 2 "#0=((a . b) (#0# . c) d)" "#0=((a . b) (#0# . c) ...)\n")
+  (test-cut 2 #f "(#0=(a . b) #0# . #0#)"
+    "(#0=(a . b) #0# . #0#)\n")
+  (test-cut 1 #f "(#0=(a . b) #0# . #0#)"
+    "((...) (...) a . b)\n")
+  (test-cut 3 2 "#0=((a . b) (#0# . c) d)"
+    "#0=((a . b) (#0# . c) ...)\n")
   (test-cut 1 1 "#0=((a . b) (#0# . c) d)" "((...) ...)\n")
   (test-cut 2 #f "#0=(#(#0#) . #0#)" "#0=(#(#0#) . #0#)\n")
   (test-cut 1 #f "#0=(#(#0#) . #0#)" "#0=(#(...) . #0#)\n")
   ; this is what Chez does:
   ;(test-cut 2 2 "#0=(#1=(a b) #1# . #0#)" "#0=(#1=(a b) #1# . #0#)\n")
   ; I believe we're entitled to this:
-  (test-cut 2 2 "#0=(#1=(a b) #1# . #0#)" "(#0=(a b) #0# ...)\n")
+  (test-cut 2 2 "#0=(#1=(a b) #1# . #0#)"
+    "(#0=(a b) #0# ...)\n")
   ; this is what Chez does:
   ;(test-cut 1 2 "#0=(#1=(a b) #1# . #0#)" "#0=((...) (...) . #0#)\n")
   ; I believe we're entitled to this:
   (test-cut 1 2 "#0=(#1=(a b) #1# . #0#)" "((...) (...) ...)\n")
   (test-cut 2 #f "#0=(a . (#1=#(b #0#) . #1#))"
     "(a #0=#(b (...)) . #0#)\n")
-  (test-cut 1 #f "#0=(a . (#1=#(b #0#) . #1#))" "(a #(...) . #(...))\n")
+  (test-cut 1 #f "#0=(a . (#1=#(b #0#) . #1#))"
+    "(a #(...) . #(...))\n")
   (test-cut 2 1 "#0=(a . (#1=#(b #0#) . #1#))" "(a ...)\n")
   (test-cut 3 3 "(#0=(a . #0#) #1=#(#1#) #2=(b c) #2#)"
     "(#0=(a . #0#) #1=#(#1#) (b c) ...)\n")
@@ -240,7 +280,8 @@
   (test-cut #f 1 "(#0=(a b c) #0#)" "((a ...) ...)\n")
   (test-cut 0 #f "#0=#(#0#)" "#(...)\n")
   (test-cut 1 #f "#0=#(#0#)" "#(#(...))\n")
-  (test-cut 1 #f "(#0=(a) #1=(#0#) #1#)" "((...) (...) (...))\n")
+  (test-cut 1 #f "(#0=(a) #1=(#0#) #1#)"
+    "((...) (...) (...))\n")
   (test-cut #f 1 "(a #0=(b) #0#)" "(a ...)\n")
   (test-cut #f 2 "(a #0=(b) c #0#)" "(a (b) ...)\n")
   (test-cut 2 #f "#0=(a #1=(b . #0#) . #1#)"
@@ -259,17 +300,23 @@
   (test-cut 1 1 "((#0=(a) #0#) (#1=(b) #1#))" "((...) ...)\n")
   (test-cut 1 #f "#0=#(#1=(a . #0#) #1#)" "#((...) (...))\n")
   (test-cut 0 0
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 0 1
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 0 2
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 0 3
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 1 0
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 1 1
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(a ...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(a ...)\n")
   (test-cut 1 2
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a (...) ...)\n")
@@ -277,9 +324,11 @@
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a (...) (...) ...)\n")
   (test-cut 2 0
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 2 1
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(a ...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(a ...)\n")
   (test-cut 2 2
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a (b . #(...)) ...)\n")
@@ -287,34 +336,43 @@
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a (b . #(...)) (#(...) . d) ...)\n")
   (test-cut 3 0
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(...)\n")
   (test-cut 3 1
-    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))" "(a ...)\n")
+    "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
+    "(a ...)\n")
   (test-cut 3 2
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a #0=(b . #(#0# c)) ...)\n")
   (test-cut 3 3
     "#0=(a #1=(b . #2=#(#1# c)) (#2# . d) #0# . #3=(e . #3#))"
     "(a #0=(b . #1=#(#0# c)) (#1# . d) ...)\n")
-  (test-cut 0 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
-  (test-cut 0 1 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
-  (test-cut 0 2 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
-  (test-cut 0 3 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
-  (test-cut 1 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
+  (test-cut 0 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
+  (test-cut 0 1 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
+  (test-cut 0 2 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
+  (test-cut 0 3 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
+  (test-cut 1 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
   (test-cut 1 1 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((...) ...)\n")
   (test-cut 1 2 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((...) #(...) ...)\n")
   (test-cut 1 3 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((...) #(...) (...) ...)\n")
-  (test-cut 2 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
+  (test-cut 2 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
   (test-cut 2 1 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((a ...) ...)\n")
   (test-cut 2 2 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((a (...)) #(c d ...) ...)\n")
   (test-cut 2 3 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "#0=((a (...)) #(c d (...)) (e . #0#) ...)\n")
-  (test-cut 3 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)" "(...)\n")
+  (test-cut 3 0 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
+    "(...)\n")
   (test-cut 3 1 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
     "((a ...) ...)\n")
   (test-cut 3 2 "#0=(#1=(a (b)) #2=#(c d #1#) (e . #0#) f)"
@@ -330,16 +388,6 @@
 (test-cut 0 1 "#0='#0#" "'...\n")
 (test-cut 1 0 "#0='#0#" "#0='#0#\n")
 (test-cut 1 1 "#0='#0#" "#0='#0#\n")
-
-; skint boxes increment level
-(cond-expand
-  (skint
-   (test-cut 3 4 "#&#&#&#&(3 . #(a b c d e f g))))" "#&#&#&#&...\n")
-   (test-cut 0 0 "#0=#&#0#" "#&...\n")
-   (test-cut 0 1 "#0=#&#0#" "#&...\n")
-   (test-cut 1 0 "#0=#&#0#" "#&...\n") ; Chez gives "#&#&...\n" !
-   (test-cut 1 1 "#0=#&#0#" "#&#&...\n"))
-  (else))
 
 (display "Done.")
 (newline)
@@ -557,8 +605,8 @@
       (char-whitespace? c)
       (char=? c #\))
       (char=? c #\()
-      (char=? c #\])
-      (char=? c #\[)
+      (char=? c #\))
+      (char=? c #\()
       (char=? c #\")
       (char=? c #\|)
       (char=? c #\;)))
@@ -589,8 +637,8 @@
        ((not (char? c)) c) ; handled by %read-ahead
        ((char=? c #\() (sub-read-list c p close-paren #t))
        ((char=? c #\)) close-paren)
-       ((char=? c #\[) (sub-read-list c p close-bracket #t))
-       ((char=? c #\]) close-bracket)
+       ((char=? c #\() (sub-read-list c p close-bracket #t))
+       ((char=? c #\)) close-bracket)
        ((char=? c #\.) dot)
        ((char=? c #\') (list 'quote (sub-read-carefully p)))
        ((char=? c #\`)
@@ -736,10 +784,14 @@
                  name
                  ((null) (integer->char 0))
                  ((space) #\space)
-                 ;[(alarm) #\alarm]
+                 ((alarm) #\alarm)
                  ((backspace) #\backspace)
+                 ((delete) (integer->char 127)) ; todo: support by SFC
+                 ((escape) (integer->char 27))
                  ((tab) #\tab)
                  ((newline linefeed) #\newline)
+                 ;((vtab) #\vtab)
+                 ;((page) #\page)
                  ((return) #\return)
                  (else (r-error p "unknown #\\ name" name))))))
              (else (read-char p) c))))
@@ -855,6 +907,8 @@
        ((char=? c #\b) #\backspace)
        ((char=? c #\t) #\tab)
        ((char=? c #\n) #\newline)
+       ;((char=? c #\v) #\vtab)
+       ;((char=? c #\f) #\page)
        ((char=? c #\r) #\return)
        ((char=? c #\x) (sub-read-x-char-escape p #t))
        ((and (eq? what 'string) (char-whitespace? c))
@@ -908,121 +962,11 @@
       (if (null? shared) form (patch-shared form))
       (r-error port "unexpected token:" (cdr form))))))
 
-(define sexp3
-  '(cond
-    ((equal? (token-value tok) "remove")
-     (continue
-      nc
-      ti
-      (lambda
-       (tree)
-       (unless
-        (moore-lookup-node tree s)
-        (p-error ti "notation for ~s does not exist" s))
-       (moore-remove-handler tree s))))
-    ((equal? (token-value tok) "additive")
-     (let-parse-result
-      (((hd nc ti) (parse-null nc (ti-pop ti 'lpar) rbp)))
-      (define op (string->symbol s))
-      (define hd (operand-token->expression tk))
-      (define-values (a . b) `(,a ,@b))
-      (define-values
-       (ti comb)
-       (if
-        (eq? (token-type (ti-car ti)) 'comma)
-        (values (ti-pop (ti-cdr (ti-cdr ti)) 'rpar) list)
-        (values (ti-pop ti 'rpar) nary)))
-      (continue
-       (notation-conf-add-led
-        nc
-        op
-        infix-led
-        bp:add
-        bp:add
-        hd
-        comb)
-       ti
-       (add-auto-handler s))))
-    (else
-     (p-error
-      ti
-      "unknown modifier for notation: ~a"
-      (token-value tok)))))
-
-(define sexp4
-  '(define-syntax
-    set*!
-    (lambda
-     (x)
-     (letrec
-      ((unwrap-exp
-        (lambda
-         (x)
-         (let
-          ((x (unwrap-syntax x)))
-          (if (pair? x) (cons (car x) (unwrap-exp (cdr x))) x)))))
-      (let
-       ((sets (map unwrap-exp (cdr (unwrap-exp x)))))
-       (let
-        ((ids (map car sets))
-         (vals (map cadr sets))
-         (temps (map (lambda (x) (generate-identifier)) sets)))
-        `(,'let
-          ,(map list temps vals)
-          ,@(map
-             (lambda (id temp) `(,'set! ,id ,temp))
-             ids
-             temps)
-          #f)))))))
-
-(define sexp5
-  '(define
-    (normalize-definition t syntax-definition?)
-    (cond
-     ((pair? (cdr t))
-      (let
-       ((_ (car t)) (head (cadr t)) (body (cddr t)))
-       (cond
-        ((and (identifier? head) (pair? body) (null? (cdr body)))
-         `(,_ ,head unquote body))
-        ((and
-          (pair? head)
-          (identifier? (car head))
-          (formals? (cdr head)))
-         (let
-          ((r (make-primitive-renaming-procedure)))
-          (if
-           syntax-definition?
-           `(,_
-             ,(car head)
-             ,(let
-               ((transformer (r (symbolic-name (car head)))))
-               `((,(r 'lambda)
-                  (,transformer)
-                  (,(r 'lambda)
-                   (,(r 'form))
-                   (,(r 'apply) ,transformer ,(r 'form))))
-                 (,(r 'lambda)
-                  (,(r 'dummy) unquote (cdr head))
-                  unquote
-                  body))))
-           `(,_ ,(car head) (,(r 'lambda) ,(cdr head) unquote body)))))
-        (else (syntax-error "Syntax error in definition:" t)))))
-     (else (syntax-error "Syntax error in definition:" t)))))
-
+(newline)
+(pp sexp1)
 
 (newline)
-(pp sexp1 pp-code #t pp-brackets #t pp-max-tab 5)
-;(dbg #t)
-;(pp sexp1 pp-code #t pp-brackets #t pp-max-tab 5)
-;(pp sexp1 pp-code #f)
-
-(newline)
-(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5)
-
-(newline)
-(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-lines 15)
+(pp sexp2 pp-width 90)
 
 (do
   ((l
@@ -1067,27 +1011,4 @@
 (pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
          23 24 25 26 27 28 29 30)
     pp-width 20 pp-radix 16)
-
-(newline)
-(pp sexp1 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
-
-(newline)
-(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
-
-(newline)
-(pretty-style 'let-parse-result
-  (pretty-style 'let-values))
-(pp sexp3 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
-
-(newline)
-(pp sexp4 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
-
-(newline)
-(pp sexp5 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
-
 

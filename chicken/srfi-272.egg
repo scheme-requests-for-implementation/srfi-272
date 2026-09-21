@@ -1,0 +1,39 @@
+; SPDX-FileCopyrightText: 2026 Sergei Egorov
+;
+; SPDX-License-Identifier: MIT
+
+; CHICKEN egg for SRFI 272.  Build and install with chicken-install from this
+; directory; after that the libraries are importable by their SRFI names.
+; (srfi 272 show) is left out: it needs SRFI 166, which CHICKEN does not have.
+
+((synopsis "Pretty printing")
+ (author "Sergei Egorov")
+ (license "MIT")
+ (category io)
+ (version "1.0.0")
+ (dependencies r7rs)
+ (components
+   (extension srfi-272
+     (source "srfi/272.scm")
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.measure
+     (source "srfi/272/measure.scm")
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.colorize
+     (source "srfi/272/colorize.scm")
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.basic
+     (source "srfi/272/basic.scm")
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.intermediate
+     (source "srfi/272/intermediate.scm")
+     (component-dependencies srfi.272.measure)
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.advanced
+     (source "srfi/272/advanced.scm")
+     (component-dependencies srfi.272.measure srfi.272.colorize)
+     (csc-options "-R" "r7rs" "-X" "r7rs"))
+   (extension srfi.272.fancy
+     (source "srfi/272/fancy.scm")
+     (component-dependencies srfi.272.advanced srfi.272.colorize)
+     (csc-options "-R" "r7rs" "-X" "r7rs"))))

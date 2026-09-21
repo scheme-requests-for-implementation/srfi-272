@@ -5,8 +5,12 @@
 ;; -*- mode: scheme; fill-column: 90; pp-inline-width: 70; pp-max-tab: 5 -*-
 
 (import (scheme base) (scheme read) (scheme write))
-(import (srfi 272 fancy))
-(import (srfi 272 colorize))
+(import (srfi-272 advanced))
+
+; Guile cannot read #N= / #N# on its own; see datum-labels.sld.
+(import (datum-labels))
+(install-datum-labels!)
+;(import (srfi-272 colorize))
 
 (define (pp-test llen input expected)
   (let ((p (open-output-string)))
@@ -32,9 +36,7 @@
     ((obj (let ((p (open-input-string input))) (read p)))
      (actual
       (parameterize ((pp-level level) (pp-length length))
-        (let ((p (open-output-string)))
-          (pp obj p)
-          (get-output-string p)))))
+        (let ((p (open-output-string))) (pp obj p) (get-output-string p)))))
     (if (string=? actual expected)
         (begin (display "PASS: ") (display input) (display "\n"))
         (begin
@@ -61,9 +63,11 @@
 (pp-test 40 "'(a b)" "'(a b)\n")
 (pp-test 40 "'(a . b)" "'(a . b)\n")
 (pp-test 40 "`(,a ,@b)" "`(,a ,@b)\n")
+; pp-inline-width defaults to #f here, so this stays on one line, as it does
+; under Guile's own printer.
 (pp-test 80
   "(let ((x 1) (y 2) (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3)) (display x) (display y))"
-  "(let\n  ((x 1)\n   (y 2)\n   (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3))\n  (display x)\n  (display y))\n")
+  "(let ((x 1) (y 2) (zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 3))\n  (display x)\n  (display y))\n")
 
 ; graph cycles tests (default mode)
 (pp-test 40 "#0=(a . #0#)" "#0=(a . #0#)\n")
@@ -331,16 +335,6 @@
 (test-cut 1 0 "#0='#0#" "#0='#0#\n")
 (test-cut 1 1 "#0='#0#" "#0='#0#\n")
 
-; skint boxes increment level
-(cond-expand
-  (skint
-   (test-cut 3 4 "#&#&#&#&(3 . #(a b c d e f g))))" "#&#&#&#&...\n")
-   (test-cut 0 0 "#0=#&#0#" "#&...\n")
-   (test-cut 0 1 "#0=#&#0#" "#&...\n")
-   (test-cut 1 0 "#0=#&#0#" "#&...\n") ; Chez gives "#&#&...\n" !
-   (test-cut 1 1 "#0=#&#0#" "#&#&...\n"))
-  (else))
-
 (display "Done.")
 (newline)
 
@@ -374,10 +368,7 @@
          (if
           (ast-null? a)
           (+ sum count 1)
-          (loop
-           (ast-cdr a)
-           (+ sum (ast-width (ast-car a)))
-           (+ count 1))))
+          (loop (ast-cdr a) (+ sum (ast-width (ast-car a))) (+ count 1))))
         (+ 1 (ast-width (ast-car a)) 3 (ast-width (ast-cdr a)) 1)))
       (else 0)))
     (define
@@ -395,18 +386,13 @@
          (if
           (ast-null? a)
           (+ sum count 1)
-          (loop
-           (ast-cdr a)
-           (+ sum (ast-width (ast-car a)))
-           (+ count 1))))
+          (loop (ast-cdr a) (+ sum (ast-width (ast-car a))) (+ count 1))))
         (+ 1 (ast-width (ast-car a)) 3 (ast-width (ast-cdr a)) 1)))
       (else
        (cond
         ((foo) => (lambda (v) (bar v 0)))
         (else (begin (newline) (if a #t #f)))))))
-    (define
-     (break? cur-col width max-col)
-     (> (+ cur-col width) max-col))
+    (define (break? cur-col width max-col) (> (+ cur-col width) max-col))
     (define
      (print-indent n port)
      (do ((i 0 (+ i 1))) ((= i n)) (display "  " port)))
@@ -470,13 +456,11 @@
           ((car-col (pretty (ast-car a) (+ col 1) indent port max-col)))
           (display " . " port)
           (let
-           ((cdr-col
-             (pretty (ast-cdr a) (+ car-col 3) indent port max-col)))
+           ((cdr-col (pretty (ast-cdr a) (+ car-col 3) indent port max-col)))
            (display ")" port)
            (+ cdr-col 1))))))))
     (let
-     ((port
-       (if (null? opt-port) (current-output-port) (car opt-port))))
+     ((port (if (null? opt-port) (current-output-port) (car opt-port))))
      (pretty a 0 0 port 80)
      (newline port))))
 
@@ -569,8 +553,7 @@
       ((form (sub-read p)))
       (cond
        ((eof-object? form) (r-error p "unexpected end of file"))
-       ((reader-token? form)
-        (r-error p "unexpected token:" (cdr form)))
+       ((reader-token? form) (r-error p "unexpected token:" (cdr form)))
        (else form))))
 
     (define
@@ -593,12 +576,9 @@
        ((char=? c #\]) close-bracket)
        ((char=? c #\.) dot)
        ((char=? c #\') (list 'quote (sub-read-carefully p)))
-       ((char=? c #\`)
-        (list 'quasiquote (sub-read-carefully p)))
+       ((char=? c #\`) (list 'quasiquote (sub-read-carefully p)))
        ((char=? c #\n)
-        (r-error
-         p
-         "unsupported number syntax (implementation restriction)"))
+        (r-error p "unsupported number syntax (implementation restriction)"))
        ((char=? c #\d) (r-error p "invalid delimiter"))
        ((char=? c #\y) (r-error p "unsupported symbol syntax"))
        ((char=? c #\z) (r-error p "invalid token"))
@@ -632,14 +612,12 @@
          (let
           ((c (read-char p)))
           (cond
-           ((eof-object? c)
-            (r-error p "end of file within a |symbol|"))
+           ((eof-object? c) (r-error p "end of file within a |symbol|"))
            ((char=? c #\\)
             (let
              ((e (sub-read-strsym-char-escape p 'symbol)))
              (loop (if e (cons e l) l))))
-           ((char=? c #\|)
-            (string->symbol (list->string (reverse! l))))
+           ((char=? c #\|) (string->symbol (list->string (reverse! l))))
            (else (loop (cons c l)))))))
        ((char=? c #\#)
         (let
@@ -676,16 +654,11 @@
              ((s8) (list->numvector (sub-read-numerical-list p name) 1))
              ((u16) (list->numvector (sub-read-numerical-list p name) 2))
              ((s16) (list->numvector (sub-read-numerical-list p name) 3))
-             ((f32)
-              (list->numvector (sub-read-numerical-list p name) 10))
-             ((f64)
-              (list->numvector (sub-read-numerical-list p name) 11))
+             ((f32) (list->numvector (sub-read-numerical-list p name) 10))
+             ((f64) (list->numvector (sub-read-numerical-list p name) 11))
              (else (r-error p "unexpected name after #" name)))))
           ((char=? c #\&) (read-char p) (box (sub-read-carefully p)))
-          ((char=? c #\;)
-           (read-char p)
-           (sub-read-carefully p)
-           (sub-read p))
+          ((char=? c #\;) (read-char p) (sub-read-carefully p) (sub-read p))
           ((char=? c #\|)
            (read-char p)
            (let
@@ -722,10 +695,7 @@
              ((eof-object? c) (r-error p "end of file after #\\"))
              ((char=? #\x c)
               (read-char p)
-              (if
-               (char-delimiter? (peek-char p))
-               c
-               (sub-read-x-char-escape p #f)))
+              (if (char-delimiter? (peek-char p)) c (sub-read-x-char-escape p #f)))
              ((char-alphabetic? c)
               (let
                ((name (sub-read-carefully p)))
@@ -753,8 +723,7 @@
             (let
              ((c (read-char p)))
              (cond
-              ((eof-object? c)
-               (r-error p "end of file within a #N notation"))
+              ((eof-object? c) (r-error p "end of file within a #N notation"))
               ((char-numeric? c) (loop (cons c l)))
               ((char=? c #\#)
                (let*
@@ -774,8 +743,7 @@
                  (let
                   ((form (sub-read-carefully p)))
                   (cond
-                   ((shared-ref? form)
-                    (r-error p "#n= has another label as target" s))
+                   ((shared-ref? form) (r-error p "#n= has another label as target" s))
                    (else (set-box! loc form) form))))))
               (else (r-error p "invalid terminator for #N notation"))))))
           (else (r-error p "unknown # syntax" c)))))
@@ -799,15 +767,13 @@
           (if
            dot?
            (let*
-            ((last-form (sub-read-carefully p))
-             (another-form (sub-read p)))
+            ((last-form (sub-read-carefully p)) (another-form (sub-read p)))
             (if
              (eq? another-form close-token)
              last-form
              (r-error p "randomness after form after dot" another-form)))
            (r-error p "dot in #(...)")))
-         ((reader-token? form)
-          (r-error p "error inside list --" (cdr form)))
+         ((reader-token? form) (r-error p "error inside list --" (cdr form)))
          (else (cons form (recur (sub-read p)))))))))
 
     (define
@@ -819,30 +785,19 @@
       recur
       ((form (sub-read p)))
       (cond
-       ((eof-object? form)
-        (r-error p (format "eof inside ~avector" ts)))
+       ((eof-object? form) (r-error p (format "eof inside ~avector" ts)))
        ((eq? form close-paren) '())
        ((reader-token? form)
-        (r-error
-         p
-         (format "error inside ~avector --" ts)
-         (cdr form)))
+        (r-error p (format "error inside ~avector --" ts) (cdr form)))
        ((or
          (and (eq? ts 'u8) (fixnum? form) (fx<=? 0 form 255))
          (and (eq? ts 's8) (fixnum? form) (fx<=? -128 form 127))
          (and (eq? ts 'u16) (fixnum? form) (fx<=? 0 form 65535))
-         (and
-          (eq? ts 's16)
-          (fixnum? form)
-          (fx<=? -32768 form 32767))
+         (and (eq? ts 's16) (fixnum? form) (fx<=? -32768 form 32767))
          (and (eq? ts 'f32) (flonum? form))
          (and (eq? ts 'f64) (flonum? form)))
         (cons form (recur (sub-read p))))
-       (else
-        (r-error
-         p
-         (format "invalid ~a inside ~avector --" ts ts)
-         form)))))
+       (else (r-error p (format "invalid ~a inside ~avector --" ts ts) form)))))
 
     (define
      (sub-read-strsym-char-escape p what)
@@ -877,8 +832,7 @@
       (if
        (null? l)
        (r-error p "\\x escape sequence is too short")
-       (integer->char
-        (string->fixnum (list->string (reverse! l)) 16))))
+       (integer->char (string->fixnum (list->string (reverse! l)) 16))))
      (let
       loop
       ((c (peek-char p)) (l '()) (cc 0))
@@ -888,17 +842,12 @@
          in-string?
          (r-error p "end of file within a string")
          (rev-digits->char l)))
-       ((and in-string? (char=? c #\;))
-        (read-char p)
-        (rev-digits->char l))
-       ((and (not in-string?) (char-delimiter? c))
-        (rev-digits->char l))
+       ((and in-string? (char=? c #\;)) (read-char p) (rev-digits->char l))
+       ((and (not in-string?) (char-delimiter? c)) (rev-digits->char l))
        ((not (char-hex-digit? c))
         (r-error p "unexpected char in \\x escape sequence" c))
        ((> cc 2) (r-error p "\\x escape sequence is too long"))
-       (else
-        (read-char p)
-        (loop (peek-char p) (cons c l) (+ cc 1))))))
+       (else (read-char p) (loop (peek-char p) (cons c l) (+ cc 1))))))
 
     ; body of %read
     (let
@@ -933,21 +882,11 @@
         (values (ti-pop (ti-cdr (ti-cdr ti)) 'rpar) list)
         (values (ti-pop ti 'rpar) nary)))
       (continue
-       (notation-conf-add-led
-        nc
-        op
-        infix-led
-        bp:add
-        bp:add
-        hd
-        comb)
+       (notation-conf-add-led nc op infix-led bp:add bp:add hd comb)
        ti
        (add-auto-handler s))))
     (else
-     (p-error
-      ti
-      "unknown modifier for notation: ~a"
-      (token-value tok)))))
+     (p-error ti "unknown modifier for notation: ~a" (token-value tok)))))
 
 (define sexp4
   '(define-syntax
@@ -969,10 +908,7 @@
          (temps (map (lambda (x) (generate-identifier)) sets)))
         `(,'let
           ,(map list temps vals)
-          ,@(map
-             (lambda (id temp) `(,'set! ,id ,temp))
-             ids
-             temps)
+          ,@(map (lambda (id temp) `(,'set! ,id ,temp)) ids temps)
           #f)))))))
 
 (define sexp5
@@ -985,10 +921,7 @@
        (cond
         ((and (identifier? head) (pair? body) (null? (cdr body)))
          `(,_ ,head unquote body))
-        ((and
-          (pair? head)
-          (identifier? (car head))
-          (formals? (cdr head)))
+        ((and (pair? head) (identifier? (car head)) (formals? (cdr head)))
          (let
           ((r (make-primitive-renaming-procedure)))
           (if
@@ -1002,10 +935,7 @@
                   (,(r 'lambda)
                    (,(r 'form))
                    (,(r 'apply) ,transformer ,(r 'form))))
-                 (,(r 'lambda)
-                  (,(r 'dummy) unquote (cdr head))
-                  unquote
-                  body))))
+                 (,(r 'lambda) (,(r 'dummy) unquote (cdr head)) unquote body))))
            `(,_ ,(car head) (,(r 'lambda) ,(cdr head) unquote body)))))
         (else (syntax-error "Syntax error in definition:" t)))))
      (else (syntax-error "Syntax error in definition:" t)))))
@@ -1021,8 +951,7 @@
 (pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5)
 
 (newline)
-(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-lines 15)
+(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-lines 15)
 
 (do
   ((l
@@ -1045,49 +974,43 @@
     (display " ")
     (display length)
     (display " -- ")
-    (pp '(if (member x y) (+ (car x) 3) '(foo . #(a b c d "Baz")))
-        pp-level level pp-length length)))
+    (pp '(if (member x y) (+ (car x) 3) '(foo . #(a b c d "Baz"))) pp-level level
+        pp-length length)))
 
-(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-         23 24 25 26 27 28 29 30)
+(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+         26 27 28 29 30)
     pp-width 20)
 
-(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-         23 24 25 26 27 28 29 30)
+(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+         26 27 28 29 30)
     pp-width 20 pp-radix 2)
 
-(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-         23 24 25 26 27 28 29 30)
+(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+         26 27 28 29 30)
     pp-width 20 pp-radix 8)
 
-(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-         23 24 25 26 27 28 29 30)
+(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+         26 27 28 29 30)
     pp-width 20 pp-radix 10)
 
-(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22
-         23 24 25 26 27 28 29 30)
+(pp '#u8(0 10 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+         26 27 28 29 30)
     pp-width 20 pp-radix 16)
 
 (newline)
-(pp sexp1 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
+(pp sexp1 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-color #t)
 
 (newline)
-(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
+(pp sexp2 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-color #t)
 
 (newline)
-(pretty-style 'let-parse-result
-  (pretty-style 'let-values))
-(pp sexp3 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
+(pretty-style 'let-parse-result (pretty-style 'let-values))
+(pp sexp3 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-color #t)
 
 (newline)
-(pp sexp4 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
+(pp sexp4 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-color #t)
 
 (newline)
-(pp sexp5 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5
-    pp-color #t)
+(pp sexp5 pp-code #t pp-width 90 pp-brackets #t pp-max-tab 5 pp-color #t)
 
 

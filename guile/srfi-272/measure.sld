@@ -5,7 +5,7 @@
 ; Char-width library: scheme analog of wcwidth()
 ; returns #f, 0, 1, 2
 
-(define-library (srfi 272 measure)
+(define-library (srfi-272 measure)
   (import (scheme base) (scheme char))
 
   (export char-width-procedure)

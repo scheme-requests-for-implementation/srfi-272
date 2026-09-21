@@ -9,23 +9,23 @@
     (scheme case-lambda) (scheme inexact) (scheme file)
     (scheme read) (scheme write))
 
-  ; we need to be able to modify global parameters
-  (import (srfi 39))
+  ; We need to be able to modify global parameters, which is what (srfi 39) is
+  ; for elsewhere.  Gambit's own parameter objects are already settable, so the
+  ; names are taken straight from (scheme base) rather than defining a (srfi 39)
+  ; here: a library of that name in the search path would collide with a real one.
+  (import (only (scheme base) make-parameter parameterize))
 
   ; char-width, returning #f 0 1 2
   (import (srfi 272 measure))
   ; color support
   (import (srfi 272 colorize))
 
-  ; extra imports depending on library availability
-  ; TODO: add num vector srfis here
-  (cond-expand
-    (skint
-     (import
-       (only (skint) box? box unbox numvector? numvector-length
-             numvector-ref)))
-    (else))
+  ; Gambit's own boxes, which it reads and writes as #&x
+  (import (only (gambit) box? box unbox))
 
+  ; Gambit has no global pretty-printing width; a port carries its own, which
+  ; is what Gambit's native pp goes by.  See pp-width below.
+  (import (only (gambit) output-port-width))
 
   ; procedures
   (export pp pp* pprint pprint-shared pprint-simple pprint-file
@@ -44,10 +44,11 @@
 
   (begin
     (define (cv-width x)
-      (if (and (number? x) (exact? x) (> x 0))
+      ; 'port means: ask the destination port, which is where Gambit keeps it
+      (if (or (eq? x 'port) (and (number? x) (exact? x) (> x 0)))
           x
           (error "invalid value for pp-width" x)))
-    (define pp-width (make-parameter 80 cv-width))
+    (define pp-width (make-parameter 'port cv-width))
 
     ; detect and mark cyclic substructure
     (define (cv-boolean x) (not (not x)))
@@ -133,7 +134,7 @@
       (if (and (number? x) (exact? x) (>= x 0))
           x
           (error "invalid value for pp-max-tab" x)))
-    (define pp-max-tab (make-parameter 4 cv-max-tab))
+    (define pp-max-tab (make-parameter 7 cv-max-tab))
 
     ; #f or remaining amount of space before width to switch to the
     ; compact ('miser') printing mode with minimal indents
@@ -150,7 +151,7 @@
       (if (or (not x) (and (number? x) (exact? x) (>= x 0)))
           x
           (error "invalid value for pp-inline-width" x)))
-    (define pp-inline-width (make-parameter 60 cv-inline-width))
+    (define pp-inline-width (make-parameter #f cv-inline-width))
 
     ; print square brackets around selected subforms
     (define pp-brackets (make-parameter #f cv-boolean))
@@ -332,12 +333,19 @@
     ; the body of the formatter is embeded into pp to allow direct
     ; access to the external parameters through the local environment
     ; instead of threading them through the code
-    (define (pp sexp . rest)
-      (define-values (*port* kv*)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            ; if port is not given as optional, look for the kw
-            (values (current-output-port) rest)))
+    ; Gambit binds pp to a decompiler/pretty-printer combo: given a procedure it
+    ; prints the source it was compiled from.  Importing this library would take
+    ; that away, so the source is recovered here and printed by the code below,
+    ; which also gives it this library's controls.
+    (define (pp-subject obj)
+      (if (procedure? obj) (##decompile obj) obj))
+
+    (define (pp obj . rest)
+      (define sexp (pp-subject obj))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (output-port? (car rest))))
+      (define *port* (if given? (car rest) (current-output-port)))
+      (define kv* (if given? (cdr rest) rest))
 
       ; we use parameters themselves as keys: they are unique procedures
       ; note: pp only searches for and calls parameters it *knows*, not
@@ -351,7 +359,14 @@
                 (else (error "invalid pp parameter list" a)))))
 
       ; bring in all external parameters as lexical vars
-      (define *width* (kval kv* pp-width cv-width))
+      (define *width*
+        ; 'port means: take it from where the output is going
+        (let ((w (kval kv* pp-width cv-width)))
+          (if (not (eq? w 'port))
+              w
+              ; a port that will not say keeps us on the conventional 80
+              (let ((pw (output-port-width *port*)))
+                (if (and (exact? pw) (> pw 0)) pw 80)))))
       (define *circle* (kval kv* pp-circle cv-boolean))
       (define *graph* (kval kv* pp-graph cv-boolean))
       (define *radix* (or (kval kv* pp-radix cv-radix) 10))
@@ -1246,28 +1261,28 @@
     ; overrides pp-graph/pp-circle params; will hang on cycles
     ; this one is the fastest of them all
     (define (pprint-simple obj . rest)
-      (define-values (port kv*)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            (values (current-output-port) rest)))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (output-port? (car rest))))
+      (define port (if given? (car rest) (current-output-port)))
+      (define kv* (if given? (cdr rest) rest))
       (pp* obj port pp-graph #f pp-circle #f kv*))
 
     ; overrides pp-graph/pp-circle params; only marks cycles
     ; spends time on detecting shared structures, and more on cycles
     (define (pprint obj . rest)
-      (define-values (port kv*)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            (values (current-output-port) rest)))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (output-port? (car rest))))
+      (define port (if given? (car rest) (current-output-port)))
+      (define kv* (if given? (cdr rest) rest))
       (pp* obj port pp-graph #f pp-circle #t kv*))
 
     ; overrides pp-graph/pp-circle param; marks all shared
     ; this one is actually faster than pprint
     (define (pprint-shared obj . rest)
-      (define-values (port kv*)
-        (if (and (pair? rest) (output-port? (car rest)))
-            (values (car rest) (cdr rest))
-            (values (current-output-port) rest)))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (output-port? (car rest))))
+      (define port (if given? (car rest) (current-output-port)))
+      (define kv* (if given? (cdr rest) rest))
       (pp* obj port pp-graph #t pp-circle #t kv*))
 
     ; map for Emacs-like file variables, mapped to parameters
@@ -1284,10 +1299,10 @@
     ; reads input file, pretty-prints it to output file or current output
     ; top-level line comments are preserved, -*- line is recognized in the header
     (define (pprint-file ifn . rest)
-      (define-values (ofn kv*)
-        (if (and (pair? rest) (string? (car rest)))
-            (values (car rest) (cdr rest))
-            (values #f rest)))
+      ; an optional first argument, told apart by its type
+      (define given? (and (pair? rest) (string? (car rest))))
+      (define ofn (if given? (car rest) #f))
+      (define kv* (if given? (cdr rest) rest))
       (define (getpar pp-xxx)
         (cond ((memq pp-xxx kv*) =>
                (lambda (p) (and (pair? (cdr p)) (cadr p))))
@@ -1453,43 +1468,10 @@
            (identifier-syntax . ec*))))
       (else))
 
-    ; conditionally initialize pp hook registry
-
-    (cond-expand
-      (skint
-       (pp-hooks
-         (add-pp-hook (pp-hooks) box?
-           (glst-pp-hook "#&" (lambda (x) (list (unbox x)))
-             (lambda (x) (box (car x))) "")))
-       (pp-hooks
-         (add-pp-hook (pp-hooks)
-           (lambda (x)
-             (case (numvector? x)
-               ((#f 0) #f)
-               ((1)
-                (bvec-pp-hook "#s8(" numvector-length numvector-ref ")"))
-               ((2)
-                (bvec-pp-hook "#u16(" numvector-length numvector-ref ")"))
-               ((3)
-                (bvec-pp-hook "#s16(" numvector-length numvector-ref ")"))
-               ((4)
-                (bvec-pp-hook "#u32(" numvector-length numvector-ref ")"))
-               ((5)
-                (bvec-pp-hook "#s32(" numvector-length numvector-ref ")"))
-               ((6)
-                (bvec-pp-hook "#u64(" numvector-length numvector-ref ")"))
-               ((7)
-                (bvec-pp-hook "#s64(" numvector-length numvector-ref ")"))
-               ((10)
-                (bvec-pp-hook "#f32(" numvector-length numvector-ref ")"))
-               ((11)
-                (bvec-pp-hook "#f64(" numvector-length numvector-ref ")"))
-               ((14)
-                (bvec-pp-hook "#c64(" numvector-length numvector-ref ")"))
-               ((15)
-                (bvec-pp-hook "#c128(" numvector-length numvector-ref ")"))
-               ; todo: add 2 to numvector-length for #*0101... bitvec notation
-               (else (atom-pp-hook #t written-width (lambda (x radix) x))))))))
-      (else))))
+    ; Gambit reads and writes boxes as #&x, so print them that way
+    (pp-hooks
+      (add-pp-hook (pp-hooks) box?
+        (glst-pp-hook "#&" (lambda (x) (list (unbox x)))
+          (lambda (x) (box (car x))) "")))))
 
 
