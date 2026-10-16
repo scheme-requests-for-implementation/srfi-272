@@ -396,7 +396,7 @@ on the output. For these matters, it behaves as specified in the parameter descr
   &nbsp;&nbsp;<i>procedure</i><br class="hsp"/>
 
   This extended variant of <code>pp</code> accepts additional keyword arguments in the
-  form of alternating key and value expressions. Each key expression must evaluate to a parameter object available through
+  form of alternating key and value expressions. Each key expression should evaluate to a parameter object available through
   this library (normally, they are just names of the parameters). Each value expression must evaluate to an object
   acceptable as a value for the preceding parameter.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;When determining the value for a parameter, <code>pp</code> first scans its keyword arguments
@@ -410,7 +410,7 @@ on the output. For these matters, it behaves as specified in the parameter descr
   <code>(<b>pp*</b></code> <i>obj</i>&thinsp; [<i>port</i>&hairsp;] [<i>key</i>&thinsp; <i>value</i>&thinsp;]&thinsp;&hellip;
   <i>kv-list</i>&hairsp;<code>)</code> &nbsp;&nbsp;<i>procedure</i><br class="hsp"/>
 
-  This variant of <code>pp</code> accepts keyword arguments followed by a final expression that must evaluate to a proper
+  This variant of <code>pp</code> accepts keyword arguments followed by a final expression that should evaluate to a proper
   list of alternating keys and values. This final list is effectively ‘spliced’ into the call, as if its contents were
   passed to pp via <code>apply</code>. Example:
 </p>
@@ -496,13 +496,13 @@ changes in behavior depend only on the parameter values, not on the method by wh
   <code><b>pp-length</b></code> &nbsp;&nbsp;<i>parameter</i><br class="hsp"/>
 
   The <code>pp-level</code> parameter limits how deeply the printer descends into nested structures.
-  Its value must be either <code>#f</code> (the default, meaning no limit) or an exact nonnegative integer.
+  Its value should be either <code>#f</code> (the default, meaning no limit) or an exact nonnegative integer.
   The object passed to the printer is at level 0; if it is a list or vector, its elements are at level 1,
   their sub-elements at level 2, and so on. When the printer encounters a component at a level equal to or
   exceeding this bound, it prints a ‘stub’ instead of recursing further. This restriction applies only to objects
   with list-like syntax; atomic values such as booleans, symbols, strings, and numbers are unaffected.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;The <code>pp-length</code> parameter limits how many elements are shown inside any one
-  list, vector, or other list-like object. Its value must also be either <code>#f</code> (the default, meaning no
+  list, vector, or other list-like object. Its value should also be either <code>#f</code> (the default, meaning no
   limit) or an exact non-negative integer. If an object contains more elements than permitted, the printer writes
   the leading elements followed by a stub representing the remainder. For dotted lists, if the sequence contains exactly
   as many elements as the limit, the terminating atom is printed instead of a stub.<br/>
@@ -548,7 +548,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   implementation-specific default&mdash;the same default that is used for printing unknown forms.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;Although implementations are not required to implement custom styling control
   via this mechanism (they can always return <code>#f</code>), they are encouraged to do so. If they do so,
-  they must ensure that their style objects are reusable and do not depend on the length of the symbols
+  they should ensure that their style objects are reusable and do not depend on the length of the symbols
   with which they are associated.
 </p>
 
@@ -589,7 +589,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
 <p>
   <code><b>pp-lines</b></code> &nbsp;&nbsp;<i>parameter</i><br class="hsp"/>
 
-  This parameter limits the total number of lines printed. Its value must be either <code>#f</code>
+  This parameter limits the total number of lines printed. Its value should be either <code>#f</code>
   (the default, meaning no limit) or an exact non-negative integer. If the limit is reached, printing
   is terminated with a lines stub.
 </p>
@@ -610,7 +610,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   objects are printed with <code>pp-length</code> set to <code>0</code>. If the
   <code>pp-lines-stub</code> parameter is set to <code>#f</code>, the <code>pp-length-stub</code>
   string is used instead. Following Common Lisp convention, all outstanding closing parentheses
-  must be printed immediately after a line stub, before the terminating newline (if any).
+  should be printed immediately after a line stub, before the terminating newline (if any).
 </p>
 
 <p>
@@ -739,7 +739,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   If set to <code>#f</code>, this parameter commands <code>pprint-file</code> to
   ignore all comments in the input file, and to separate printed top-level expressions
   with a single empty line. If set to <code>#t</code> (the default), <code>pprint-file</code>
-  must preserve line comments and whitespace between top-level expressions, passing it to
+  should preserve line comments and whitespace between top-level expressions, passing it to
   the output verbatim. There is no requirement to preserve block or S-expression comments,
   but implementations are free to do so.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;Implementations are free to support non-boolean values
@@ -935,10 +935,10 @@ changes in behavior depend only on the parameter values, not on the method by wh
   macro (like <code>'a</code> standing for <code>(quote a)</code>). It provides a prefix string (e.g., <code>"'"</code>),
   an <i>ef</i>&thinsp; (extraction function, e.g., <code>cadr</code>), and an <i>xf</i>&thinsp; (a reverse of
   the extraction function, e.g., <code>(lambda (x) (list 'quote x))</code>.<br/>
-  &nbsp;&nbsp;&nbsp;&nbsp;The choice of which hook to use must be based on the desired printed representation,
+  &nbsp;&nbsp;&nbsp;&nbsp;The choice of which hook to use should be based on the desired printed representation,
   not the object’s internal structure. For example, bit vectors that should be printed as <code>#*010110110</code>
   cannot be described with <code>glist-pp-hook</code> or <code>bvec-pp-hook</code>, because those hooks
-  assume space-separated elements. Instead, such an object must be described with <code>atom-pp-hook</code>,
+  assume space-separated elements. Instead, such an object should be described with <code>atom-pp-hook</code>,
   even though it is internally a sequence. The same principle applies to strings.
 </p>
 
@@ -980,7 +980,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   including line comments within expressions, unless they interfere with line breaking decisions
   made by the printer. Implementations are encouraged, but not required, to consider the location of
   existing internal line comments when choosing where to insert line breaks. If <code>pp-decorate</code>
-  is <code>#f</code>, <code>pprint-file</code> must ignore all comments and separate top-level
+  is <code>#f</code>, <code>pprint-file</code> should ignore all comments and separate top-level
   expressions with a single empty line.
 </p>
 
@@ -993,7 +993,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
 
 <p>
   While processing the head of the input file (lines before the first S-expression), <code>pprint-file</code>
-  in decoration mode must recognize a special ‘magic comment’ that follows the Emacs convention for
+  in decoration mode should recognize a special ‘magic comment’ that follows the Emacs convention for
   <a href="https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html">file-local variables</a>,
   for example:
 </p>
@@ -1002,7 +1002,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
 </code></pre>
 
 <p>
-  It must parse the first such line it encounters and extract key-value pairs that can be interpreted
+  It should parse the first such line it encounters and extract key-value pairs that can be interpreted
   as pretty-printer parameters. Recognized keys include both standard Emacs variables and <code>pp-</code>
   prefixed parameter names. The minimum supported set of mappings from file variable keys to parameters
   is shown below as key-parameter pairs:
@@ -1031,9 +1031,9 @@ changes in behavior depend only on the parameter values, not on the method by wh
 
 <p>
   Also, while processing top-level line comments, <code>pprint-file</code>
-  in decoration mode must recognize special ‘style comments’, extracting custom formatting
+  in decoration mode should recognize special ‘style comments’, extracting custom formatting
   instructions embedded within them. This allows one to dynamically extend the pretty printer on a per-file
-  basis by assigning specific formatting rules to new identifiers. To be processed, a style comment must
+  basis by assigning specific formatting rules to new identifiers. To be processed, a style comment should
   have the following general structure:
 </p>
 <pre><code>;; * pp-styles:</code> <i>symbol</i> <code>:=</code> <i>style</i> [ <code>;</code> <i>symbol</i> <code>:=</code> <i>style</i> ... ]</pre>
@@ -1296,8 +1296,8 @@ changes in behavior depend only on the parameter values, not on the method by wh
 
   This procedure is similar to the SRFI 166 <code>pretty</code> formatter procedure, but uses the advanced
   printer internally. Like the <code>pp</code> procedure, it accepts additional keyword arguments in the
-  form of alternating key and value expressions. Each key expression must evaluate to a parameter object
-  available through the advanced printing library. Each value expression must evaluate to an object
+  form of alternating key and value expressions. Each key expression should evaluate to a parameter object
+  available through the advanced printing library. Each value expression should evaluate to an object
   acceptable as a value for the preceding parameter.<br/>
   &nbsp;&nbsp;&nbsp;&nbsp;The <code>pp-width</code> parameter is treated specially: for the internal
   printer call the value of the SRFI 166's <code>width</code> state variable overrides any explicitly
@@ -1308,7 +1308,7 @@ changes in behavior depend only on the parameter values, not on the method by wh
   <code>(<b>pprinted*</b></code> <i>obj</i>&thinsp; [<i>key</i>&thinsp; <i>value</i>&thinsp;]&thinsp;&hellip;
   <i>kv-list</i>&hairsp;<code>)</code> &nbsp;&nbsp;<i>procedure</i><br class="hsp"/>
 
-  This variant of <code>pprinted</code> accepts keyword arguments followed by a final expression that must evaluate to a proper
+  This variant of <code>pprinted</code> accepts keyword arguments followed by a final expression that should evaluate to a proper
   list of alternating keys and values. This final list is effectively ‘spliced’ into the call, as if its contents were
   passed to the printer via <code>apply</code>.
 </p>
