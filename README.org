@@ -11,8 +11,8 @@ keywords: [[https://srfi.schemers.org/?keywords=i/o][I/O]]
 
 This repository hosts [[https://srfi.schemers.org/srfi-272/][SRFI 272]]: Pretty Printing, a [[https://srfi.schemers.org/][Scheme Request for Implementation]].
 
-This SRFI is in /draft/ status.
-
+This SRFI is in /final/ status.
+See also [[/srfi-166/][SRFI 166: Monadic Formatting]].
 The full documentation for this SRFI can be found in the [[https://srfi.schemers.org/srfi-272/srfi-272.html][SRFI Document]].
 
 If you'd like to participate in the discussion of this SRFI, or report issues with it, please [[https://srfi.schemers.org/srfi-272/][join the SRFI-272 mailing list]] and send your message there.
